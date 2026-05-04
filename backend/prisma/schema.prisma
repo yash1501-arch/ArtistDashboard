@@ -89,25 +89,26 @@ model PlatformMetric {
 }
 
 model Concert {
-  id                   String                @id @default(dbgenerated("gen_random_uuid()"))
+  id                   String   @id @default(dbgenerated("gen_random_uuid()"))
   artistId             String
-  concertDate          DateTime              @db.Date
+  artistName           String?   // ✅ added
+  concertDate          DateTime  @db.Date
   city                 String
   state                String?
   country              String
-  latitude             Decimal?              @db.Decimal(9, 6)
-  longitude            Decimal?              @db.Decimal(9, 6)
+  latitude             Decimal?  @db.Decimal(9, 6)
+  longitude            Decimal?  @db.Decimal(9, 6)
   venueName            String?
   capacity             Int?
-  ticketsSold          Int                   @default(0)
-  avgTicketPrice       Decimal?              @db.Decimal(10, 2)
-  totalRevenue         Decimal?              @db.Decimal(14, 2)
-  currency             String                @default("INR")
+  ticketsSold          Int       @default(0)
+  avgTicketPrice       Decimal?  @db.Decimal(10, 2)
+  totalRevenue         Decimal?  @db.Decimal(14, 2)
+  currency             String    @default("INR")
   notes                String?
-  created_at           DateTime              @default(now())
-  concertName          String?
+  created_at           DateTime  @default(now())
+  // ❌ removed concertName
   audienceDemographics AudienceDemographic[]
-  artist               Artist                @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  artist               Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@index([artistId, concertDate])
   @@index([city])
