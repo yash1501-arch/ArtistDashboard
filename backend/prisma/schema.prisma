@@ -1,0 +1,215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Artist {
+  id                      String                @id @default(dbgenerated("gen_random_uuid()"))
+  artistName              String                @unique
+  displayName             String?
+  age                     Int?
+  gender                  String?
+  genre                   String?
+  nationality             String?
+  bio                     String?
+  photoUrl                String?
+  wikiUrl                 String?
+  active                  Boolean               @default(true)
+  instagramUrl            String?
+  facebookUrl             String?
+  twitterUrl              String?
+  spotifyUrl              String?
+  youtubeUrl              String?
+  appleMusicUrl           String?
+  instagramFollowers      BigInt?
+  facebookFollowers       BigInt?
+  twitterFollowers        BigInt?
+  spotifyMonthlyListeners BigInt?
+  youtubeSubscribers      BigInt?
+  appleMusicListeners     BigInt?
+  lastUpdated             DateTime?
+  created_at              DateTime              @default(now())
+  updated_at              DateTime              @updatedAt
+  genres                  ArtistGenre[]
+  audienceDemographics    AudienceDemographic[]
+  concerts                Concert[]
+  platformMetrics         PlatformMetric[]
+
+  @@index([artistName])
+  @@index([active])
+  @@map("artists")
+}
+
+model Genre {
+  id         Int           @id @default(autoincrement())
+  name       String        @unique
+  created_at DateTime      @default(now())
+  artists    ArtistGenre[]
+
+  @@map("genres")
+}
+
+model ArtistGenre {
+  artistId String
+  genreId  Int
+  id       Int    @id @default(autoincrement())
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  genre    Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, genreId])
+  @@map("artist_genres")
+}
+
+model PlatformMetric {
+  id          String       @id @default(dbgenerated("gen_random_uuid()"))
+  artistId    String
+  platform    Platform
+  metricDate  DateTime     @db.Date
+  followers   BigInt       @default(0)
+  likes       BigInt       @default(0)
+  shares      BigInt       @default(0)
+  comments    BigInt       @default(0)
+  streams     BigInt       @default(0)
+  rogDaily    Decimal?     @db.Decimal(8, 4)
+  rogWeekly   Decimal?     @db.Decimal(8, 4)
+  rogMonthly  Decimal?     @db.Decimal(8, 4)
+  source      MetricSource @default(API)
+  rawSnapshot Json?
+  created_at  DateTime     @default(now())
+  artist      Artist       @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, platform, metricDate])
+  @@index([artistId, platform, metricDate])
+  @@index([metricDate])
+  @@map("platform_metrics")
+}
+
+model Concert {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()"))
+  artistId             String
+  concertDate          DateTime              @db.Date
+  city                 String
+  state                String?
+  country              String
+  latitude             Decimal?              @db.Decimal(9, 6)
+  longitude            Decimal?              @db.Decimal(9, 6)
+  venueName            String?
+  capacity             Int?
+  ticketsSold          Int                   @default(0)
+  avgTicketPrice       Decimal?              @db.Decimal(10, 2)
+  totalRevenue         Decimal?              @db.Decimal(14, 2)
+  currency             String                @default("INR")
+  notes                String?
+  created_at           DateTime              @default(now())
+  concertName          String?
+  audienceDemographics AudienceDemographic[]
+  artist               Artist                @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId, concertDate])
+  @@index([city])
+  @@index([country])
+  @@map("concerts")
+}
+
+model AudienceDemographic {
+  id             String               @id @default(cuid())
+  artistId       String?
+  concertId      String?
+  dimension      DemographicDimension
+  dimensionValue String               @db.VarChar(100)
+  percentage     Decimal?             @db.Decimal(5, 2)
+  absoluteCount  Int?
+  sourcePlatform String?              @db.VarChar(100)
+  metricDate     DateTime             @db.Date
+  created_at     DateTime             @default(now())
+  artist         Artist?              @relation(fields: [artistId], references: [id])
+  concert        Concert?             @relation(fields: [concertId], references: [id])
+
+  @@index([artistId])
+  @@index([concertId])
+  @@index([dimension])
+  @@map("audience_demographics")
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  role          UserRole       @default(VIEWER)
+  active        Boolean        @default(true)
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model IngestionJob {
+  id           String    @id @default(cuid())
+  jobType      JobType
+  status       JobStatus @default(PENDING)
+  fileName     String?
+  rowCount     Int       @default(0)
+  errorMessage String?
+  duration     Int?
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+
+  @@map("ingestion_jobs")
+}
+
+enum JobType {
+  EXCEL_IMPORT
+  PLATFORM_SYNC
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+enum Platform {
+  FACEBOOK
+  INSTAGRAM
+  TWITTER
+  YOUTUBE
+  SPOTIFY
+  APPLE_MUSIC
+  REDDIT
+  QUORA
+}
+
+enum MetricSource {
+  API
+  EXCEL_IMPORT
+}
+
+enum DemographicDimension {
+  AGE_GROUP
+  GENDER
+  GEOGRAPHY
+  GENRE
+}
+
+enum UserRole {
+  ADMIN
+  VIEWER
+}

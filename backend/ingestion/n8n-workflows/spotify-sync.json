@@ -1,0 +1,89 @@
+{
+  "name": "Spotify Daily Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 3 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron",
+      "name": "Schedule (3 AM Daily)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.spotify.com/v1/me",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "oAuth2": {
+          "token": "={{ $credentials.oauthAccessToken }}"
+        },
+        "options": {}
+      },
+      "id": "spotifyApi",
+      "name": "Spotify API (Profile)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "spotifyOAuth",
+          "name": "Spotify OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Similar transformation logic\nreturn [{ platform: 'SPOTIFY' }];"
+      },
+      "id": "transform",
+      "name": "Transform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "platform_metrics",
+        "columns": "artist_id,platform,metric_date,followers,likes,shares,comments,streams,source"
+      },
+      "id": "postgres",
+      "name": "PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [840, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule (3 AM Daily)": {
+      "main": [[{ "node": "Spotify API (Profile)", "type": "main", "index": 0 }]]
+    },
+    "Spotify API (Profile)": {
+      "main": [[{ "node": "Transform", "type": "main", "index": 0 }]]
+    },
+    "Transform": {
+      "main": [[{ "node": "PostgreSQL", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": ["ingestion", "spotify"],
+  "versionId": "1"
+}

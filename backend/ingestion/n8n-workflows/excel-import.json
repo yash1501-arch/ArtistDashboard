@@ -1,0 +1,126 @@
+{
+  "name": "Excel Data Import",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "webhook",
+        "responses": {
+          "responses": [
+            {
+              "responseCode": "200",
+              "responseHeaders": "",
+              "responseBody": "{ \"success\": true, \"message\": \"File received, processing...\" }"
+            }
+          ]
+        }
+      },
+      "id": "webhook",
+      "name": "Webhook (Upload Trigger)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [180, 300],
+      "webhookId": "excel-upload-webhook"
+    },
+    {
+      "parameters": {
+        "operation": "file",
+        "fileUrl": "={{ $json.body.fileUrl }}",
+        "binaryPropertyName": "data"
+      },
+      "id": "readBinary",
+      "name": "Read Binary File",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "binaryPropertyName": "data"
+      },
+      "id": "binaryToText",
+      "name": "Binary to Text",
+      "type": "n8n-nodes-base.binaryToText",
+      "typeVersion": 1,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "operation": "parse",
+        "fileFormat": "xlsx"
+      },
+      "id": "parseExcel",
+      "name": "Parse Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 1,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 100
+      },
+      "id": "splitInBatches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [1060, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate row based on sheet name (passed as webhook param)\nconst sheetName = $input.all()[0].json.sheetName;\nconst row = $input.all()[0].json;\n\nif (sheetName === 'Artist_Metrics') {\n  if (!row.artist_name || !row.platform || !row.metric_date) {\n    throw new Error('Missing required fields: artist_name, platform, metric_date');\n  }\n} else if (sheetName === 'Concerts') {\n  if (!row.artist_name || !row.concert_date || !row.city) {\n    throw new Error('Missing required fields: artist_name, concert_date, city');\n  }\n}\n\nreturn row;"
+      },
+      "id": "validate",
+      "name": "Validate Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1280, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "platform_metrics",
+        "columns": "artist_id,platform,metric_date,followers,likes,shares,comments,streams,source",
+        "additionalFields": {
+          "onConflict": "artist_id,platform,metric_date",
+          "updateStrategy": "UPDATE"
+        }
+      },
+      "id": "insertMetrics",
+      "name": "Insert Metrics (Batch)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1500, 200],
+      "credentials": {
+        "postgres": {
+          "id": "postgres",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook (Upload Trigger)": {
+      "main": [[{ "node": "Read Binary File", "type": "main", "index": 0 }]]
+    },
+    "Read Binary File": {
+      "main": [[{ "node": "Binary to Text", "type": "main", "index": 0 }]]
+    },
+    "Binary to Text": {
+      "main": [[{ "node": "Parse Excel", "type": "main", "index": 0 }]]
+    },
+    "Parse Excel": {
+      "main": [[{ "node": "Split In Batches", "type": "main", "index": 0 }]]
+    },
+    "Split In Batches": {
+      "main": [[{ "node": "Validate Rows", "type": "main", "index": 0 }]]
+    },
+    "Validate Rows": {
+      "main": [[{ "node": "Insert Metrics (Batch)", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": ["ingestion", "excel", "import"],
+  "versionId": "1"
+}

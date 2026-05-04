@@ -1,0 +1,98 @@
+{
+  "name": "Instagram Daily Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 1/2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "scheduleTrigger",
+      "name": "Every 2 days at 2 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://graph.instagram.com/me",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "fields", "value": "id,username,media_count,followers_count" },
+            { "name": "access_token", "value": "={{ $credentials.accessToken }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "instagramApi",
+      "name": "Instagram API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "instagramCredential",
+          "name": "Instagram API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform Instagram response\nconst data = $input.all()[0].json;\nconst today = new Date().toISOString().split('T')[0];\n\n// Fetch artists to match (in real n8n, this would be from Postgres query)\nreturn [{\n  artist_id: 'ARTIST_ID_PLACEHOLDER', // Replace with actual artist lookup\n  platform: 'INSTAGRAM',\n  metric_date: today,\n  followers: data.followers_count || 0,\n  likes: 0,\n  shares: 0,\n  comments: 0,\n  streams: 0,\n  source: 'api'\n}];"
+      },
+      "id": "transform",
+      "name": "Transform",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "platform_metrics",
+        "columns": "artist_id,platform,metric_date,followers,likes,shares,comments,streams,source",
+        "additionalFields": {
+          "onConflict": "artist_id,platform,metric_date",
+          "updateStrategy": "UPDATE"
+        }
+      },
+      "id": "postgres",
+      "name": "Save to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [840, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgresCredential",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 2 days at 2 AM": {
+      "main": [[{ "node": "Instagram API", "type": "main", "index": 0 }]]
+    },
+    "Instagram API": {
+      "main": [[{ "node": "Transform", "type": "main", "index": 0 }]]
+    },
+    "Transform": {
+      "main": [[{ "node": "Save to PostgreSQL", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": ["ingestion", "instagram"],
+  "versionId": "1",
+  "triggerCount": 1
+}

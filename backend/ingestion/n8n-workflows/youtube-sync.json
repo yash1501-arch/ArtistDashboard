@@ -1,0 +1,203 @@
+{
+  "name": "YouTube Daily Sync",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 2 * * *"
+            }
+          ]
+        }
+      },
+      "id": "scheduleTrigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        180,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/youtube/v3/channels",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpQueryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "part",
+              "value": "statistics"
+            },
+            {
+              "name": "mine",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "httpRequest",
+      "name": "YouTube API Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        400,
+        300
+      ],
+      "credentials": {
+        "httpQueryAuth": {
+          "id": "youtubeApiCredential",
+          "name": "YouTube API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transform YouTube API response to platform_metrics format\nconst items = $input.all()[0].json.items;\nconst metrics = [];\n\nfor (const item of items) {\n  const stats = item.statistics;\n  const today = new Date().toISOString().split('T')[0];\n\n  // Get all artists from database\n  const artistsReq = await $helpers.httpRequest({\n    url: `http://api:3001/api/v1/artists?limit=1000`,\n    headers: {\n      'Authorization': `Bearer ${process.env.MAD_API_TOKEN}`\n    }\n  });\n  const artists = artistsReq.json.data.artists;\n\n  // Match YouTube channel ID to artist's platform handle\n  // In production, store artist platform handles (youtube_channel_id) in artists table\n  for (const artist of artists) {\n    metrics.push({\n      artist_id: artist.id,\n      platform: 'YOUTUBE',\n      metric_date: today,\n      followers: parseInt(stats.subscriberCount) || 0,\n      likes: 0,\n      shares: 0,\n      comments: 0,\n      streams: parseInt(stats.viewCount) || 0,\n      source: 'api'\n    });\n  }\n}\n\nreturn { metrics: metrics };\n"
+      },
+      "id": "transform",
+      "name": "Transform Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        620,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "platform_metrics",
+        "columns": "artist_id,platform,metric_date,followers,likes,shares,comments,streams,source",
+        "additionalFields": {
+          "onConflict": "artist_id,platform,metric_date",
+          "updateStrategy": "UPDATE",
+          "returnValues": "all"
+        }
+      },
+      "id": "postgres",
+      "name": "Upsert to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        840,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "postgresCredential",
+          "name": "PostgreSQL (MAD)"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:3001/api/v1/ingestion/rog/recalculate",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer={{ $env.MAD_BACKEND_JWT }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "platform",
+              "value": "YOUTUBE"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "triggerRog",
+      "name": "Trigger RoG Recalc",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1060,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "madApiHeaderAuth",
+          "name": "MAD API Header Auth"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "YouTube API Call",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube API Call": {
+      "main": [
+        [
+          {
+            "node": "Transform Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform Data": {
+      "main": [
+        [
+          {
+            "node": "Upsert to PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert to PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Trigger RoG Recalc",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    "ingestion",
+    "youtube",
+    "daily"
+  ],
+  "versionId": "1",
+  "triggerCount": 1,
+  "updatedAt": "2026-03-27T00:00:00.000Z"
+}

@@ -1,0 +1,108 @@
+{
+  "name": "Generic HTTP Sync (Custom Platform)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cron",
+      "name": "Schedule (Custom)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [180, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.example-platform.com/v1/analytics",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $credentials.apiKey }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "queryParameters": {
+          "parameters": [
+            { "name": "start_date", "value": "={{ $now.minus({ hours: 24 }).toISOString().split('T')[0] }}" },
+            { "name": "end_date", "value": "={{ $now.toISOString().split('T')[0] }}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "httpRequest",
+      "name": "Platform API Call",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [400, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "platformApiCreds",
+          "name": "Platform API Key"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// CUSTOMIZE THIS TRANSFORMATION FUNCTION\n// Map the platform's API response to platform_metrics schema\n\nconst response = $input.all()[0].json;\nconst today = new Date().toISOString().split('T')[0];\n\n// Example transformation (ADJUST BASED ON ACTUAL API RESPONSE)\nconst metrics = [];\n\n// Get artists from database (query in real implementation)\n// This is placeholder - you need to match platform handles to artists\nfor (const item of response.data) {\n  metrics.push({\n    artist_id: 'ARTIST_UUID_HERE', // TODO: Look up artist by platform handle\n    platform: 'YOUR_PLATFORM_ENUM', // FACEBOOK, INSTAGRAM, TWITTER, YOUTUBE, SPOTIFY, APPLE_MUSIC, REDDIT, QUORA\n    metric_date: today,\n    followers: item.followers || item.subscriberCount || 0,\n    likes: item.likes || item.reactions || 0,\n    shares: item.shares || item.retweets || 0,\n    comments: item.comments || 0,\n    streams: item.plays || item.views || 0,\n    source: 'api'\n  });\n}\n\nreturn { metrics: metrics };"
+      },
+      "id": "transform",
+      "name": "Transform API Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [620, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "table": "platform_metrics",
+        "columns": "artist_id,platform,metric_date,followers,likes,shares,comments,streams,source",
+        "additionalFields": {
+          "onConflict": "artist_id,platform,metric_date",
+          "updateStrategy": "UPDATE"
+        }
+      },
+      "id": "postgres",
+      "name": "Upsert to PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [840, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Schedule (Custom)": {
+      "main": [[{ "node": "Platform API Call", "type": "main", "index": 0 }]]
+    },
+    "Platform API Call": {
+      "main": [[{ "node": "Transform API Response", "type": "main", "index": 0 }]]
+    },
+    "Transform API Response": {
+      "main": [[{ "node": "Upsert to PostgreSQL", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": { "executionOrder": "v1" },
+  "staticData": null,
+  "tags": ["ingestion", "generic"],
+  "versionId": "1"
+}
