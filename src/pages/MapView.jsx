@@ -51,10 +51,29 @@ function MapView() {
 
       {/* Controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
-        <select value={selectedArtist} onChange={e => setArtist(e.target.value)}
+        <select
+          value={selectedArtist}
+          onChange={e => setArtist(e.target.value)}
           className="text-sm rounded-xl px-4 py-2.5 outline-none"
-          style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontFamily: 'Satoshi' }}>
-          {artists.map(a => <option key={a} value={a}>{a}</option>)}
+          style={{
+            background: '#1e293b',   // ❗ hardcode instead of var
+            border: '1px solid #334155',
+            color: '#ffffff',
+            fontFamily: 'Satoshi'
+          }}
+        >
+          {artists.map(a => (
+            <option
+              key={a}
+              value={a}
+              style={{
+                backgroundColor: '#1e293b',
+                color: '#ffffff'
+              }}
+            >
+              {a}
+            </option>
+          ))}
         </select>
 
         <div className="flex gap-3 flex-wrap">
