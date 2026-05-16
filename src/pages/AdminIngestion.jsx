@@ -45,6 +45,29 @@ function AdminIngestion() {
     onSuccess: () => queryClient.invalidateQueries(['ingestionJobs'])
   })
 
+  // Enrich artists mutation
+  const enrichMutation = useMutation({
+    mutationFn: () => client.post('/ingestion/enrich'),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['ingestionJobs'])
+      queryClient.invalidateQueries(['artists'])
+    }
+  })
+
+  // Scrape concerts mutation
+  const scrapeMutation = useMutation({
+    mutationFn: ({ sources, dateFrom, dateTo }) =>
+      client.post('/scraping/start', { sources, dateFrom, dateTo }),
+    onSuccess: () => queryClient.invalidateQueries(['ingestionJobs'])
+  })
+
+  const [scrapeSources, setScrapeSources] = useState(['websearch', 'discovery', 'setlistfm', 'concertarchives'])
+  const [dateFrom, setDateFrom] = useState(() => new Date().toISOString().split('T')[0])
+  const [dateTo, setDateTo] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() + 3)
+    return d.toISOString().split('T')[0]
+  })
+
   // Excel upload mutation
   const uploadMutation = useMutation({
     mutationFn: (formData) => client.post('/ingestion/excel/upload', formData, {
@@ -136,6 +159,42 @@ function AdminIngestion() {
           </div>
         </div>
 
+        {/* Artist Enrichment */}
+        <div className="glass-card p-5 animate-fade-up delay-1">
+          <h3 className="font-display font-semibold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>Artist Data Enrichment</h3>
+          <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Fetch real social media data from external APIs to fill missing artist profiles</p>
+
+          <div className="p-4 rounded-xl mb-4" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 rounded-full" style={{ background: '#1DB954' }} />
+              <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Spotify</span>
+            </div>
+            <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+              Searches each artist on Spotify, fetches follower count and popularity, then stores in platform metrics
+            </p>
+            <button onClick={() => enrichMutation.mutate()} disabled={enrichMutation.isPending}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg, #1DB954, #169C46)', color: '#fff', boxShadow: '0 4px 16px rgba(29,185,84,0.3)' }}>
+              {enrichMutation.isPending ? (
+                <><RefreshCw size={14} className="animate-spin" /> Enriching All Artists...</>
+              ) : (
+                <><RefreshCw size={14} /> Enrich All Artists</>
+              )}
+            </button>
+          </div>
+
+          {enrichMutation.data?.data && (
+            <div className="p-3 rounded-xl flex items-start gap-2"
+              style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)' }}>
+              <CheckCircle size={13} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-green)' }} />
+              <p className="text-xs" style={{ color: 'var(--accent-green)' }}>
+                Enriched {enrichMutation.data.data.enriched} / {enrichMutation.data.data.total} artists
+                {enrichMutation.data.data.failed > 0 && ` (${enrichMutation.data.data.failed} failed)`}
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Platform Sync */}
         <div className="glass-card p-5 animate-fade-up delay-1">
           <h3 className="font-display font-semibold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>Platform API Sync</h3>
@@ -166,6 +225,67 @@ function AdminIngestion() {
             ))}
           </div>
         </div>
+      </div>
+
+      {/* Concert Scraper */}
+      <div className="glass-card p-5 mb-6 animate-fade-up delay-1">
+        <h3 className="font-display font-semibold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>Concert Scraper</h3>
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Discover and import concerts from web sources</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-widest block mb-1"
+              style={{ color: 'var(--text-muted)', fontSize: '10px' }}>From</label>
+            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+              className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+          </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-widest block mb-1"
+              style={{ color: 'var(--text-muted)', fontSize: '10px' }}>To</label>
+            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+              className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+          </div>
+          <div className="flex items-end gap-2">
+            <button onClick={() => scrapeMutation.mutate({
+              sources: scrapeSources,
+              dateFrom: new Date(dateFrom).toISOString(),
+              dateTo: new Date(dateTo).toISOString(),
+            })} disabled={scrapeMutation.isPending}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60"
+              style={{ background: 'linear-gradient(135deg, #6366F1, #818CF8)', color: '#fff' }}>
+              {scrapeMutation.isPending ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
+              {scrapeMutation.isPending ? 'Scraping...' : 'Start Scrape'}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {['websearch', 'discovery', 'setlistfm', 'concertarchives', 'bookmyshow', 'wikipedia'].map(src => (
+            <label key={src} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-xl cursor-pointer select-none transition-all duration-200"
+              style={{
+                background: scrapeSources.includes(src) ? 'rgba(99,102,241,0.12)' : 'var(--bg-secondary)',
+                border: `1px solid ${scrapeSources.includes(src) ? 'rgba(99,102,241,0.3)' : 'var(--border)'}`,
+                color: scrapeSources.includes(src) ? 'var(--accent-indigo)' : 'var(--text-muted)',
+              }}>
+              <input type="checkbox" checked={scrapeSources.includes(src)}
+                onChange={e => setScrapeSources(e.target.checked ? [...scrapeSources, src] : scrapeSources.filter(s => s !== src))}
+                className="hidden" />
+              {src}
+            </label>
+          ))}
+        </div>
+
+        {scrapeMutation.data?.data && (
+          <div className="mt-3 p-3 rounded-xl flex items-start gap-2"
+            style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)' }}>
+            <CheckCircle size={13} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-indigo)' }} />
+            <div className="text-xs" style={{ color: 'var(--accent-indigo)' }}>
+              Job started: <strong>{scrapeMutation.data.data.jobId || scrapeMutation.data.data.id}</strong>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Job Log */}

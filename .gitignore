@@ -43,3 +43,12 @@ backend/.env.production
 backend/.env.*.local
 backend/prisma/migrations/*/migration_lock.toml
 !backend/prisma/migrations
+
+# Python/ML ignores
+backend/ml_engine/venv/
+backend/ml_engine/__pycache__/
+*.pyc
+
+# Test and coverage reports
+backend/coverage/
+backend/test-reports/

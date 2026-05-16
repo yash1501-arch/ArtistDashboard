@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import * as xlsx from 'xlsx';
 import { prisma, redis } from '../utils/database';
+import { enrichAllArtists, enrichArtistById } from '../services/artistEnrichment.service';
 
 export const ingestionController = {
   // Upload Excel file for bulk import
@@ -79,13 +80,15 @@ export const ingestionController = {
               await prisma.concert.create({
                 data: {
                   artistId: artist.id,
-                  concertName: row.ConcertName,
+                  artistName: row.ArtistName,
                   concertDate: new Date(row.Date),
                   city: row.City,
                   country: row.Country || 'India',
                   venueName: row.Venue,
                   ticketsSold: row.TicketsSold || 0,
                   totalRevenue: row.Revenue || 0,
+                  notes: row.ConcertName || undefined,
+                  source: 'EXCEL_IMPORT',
                 },
               });
               totalRows++;
@@ -144,23 +147,87 @@ export const ingestionController = {
   syncPlatform: async (req: any, res: Response) => {
     try {
       const { platform } = req.params;
-      
+      const targetPlatform = platform?.toUpperCase();
+
+      if (targetPlatform !== 'SPOTIFY') {
+        return res.status(400).json({
+          success: false,
+          error: `Unsupported platform: ${platform}. Currently only SPOTIFY is supported.`,
+        });
+      }
+
       const job = await prisma.ingestionJob.create({
         data: {
           jobType: 'PLATFORM_SYNC',
-          status: 'PENDING',
+          status: 'RUNNING',
           fileName: platform,
         },
       });
 
-      // Placeholder for actual sync logic
+      const result = await enrichAllArtists();
+
+      await prisma.ingestionJob.update({
+        where: { id: job.id },
+        data: {
+          status: result.failed === 0 ? 'SUCCESS' : result.enriched > 0 ? 'SUCCESS' : 'FAILED',
+          completedAt: new Date(),
+          errorMessage: result.failed > 0 ? `${result.failed} artist(s) failed` : undefined,
+          rowCount: result.total,
+          duration: Math.floor((Date.now() - new Date(job.startedAt).getTime()) / 1000),
+        },
+      });
+
       return res.status(200).json({
         success: true,
-        message: `Sync triggered for ${platform}`,
-        data: { job },
+        message: `Sync completed for ${platform}`,
+        data: { job, enrichment: result },
       });
-    } catch (error) {
-      throw error;
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to sync platform',
+        details: error.message,
+      });
+    }
+  },
+
+  // Enrich all artists with social data (admin only)
+  enrichArtists: async (_req: any, res: Response) => {
+    try {
+      const result = await enrichAllArtists();
+      return res.status(200).json({
+        success: true,
+        data: result,
+      });
+    } catch (error: any) {
+      console.error('Enrichment error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to enrich artists',
+        details: error.message,
+      });
+    }
+  },
+
+  // Enrich a single artist by ID
+  enrichArtist: async (req: any, res: Response) => {
+    try {
+      const { id } = req.params;
+      const result = await enrichArtistById(id);
+
+      if (!result) {
+        return res.status(404).json({ success: false, error: 'Artist not found' });
+      }
+
+      return res.status(200).json({ success: true, data: result });
+    } catch (error: any) {
+      console.error('Enrichment error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to enrich artist',
+        details: error.message,
+      });
     }
   },
 

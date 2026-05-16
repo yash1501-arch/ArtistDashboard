@@ -36,4 +36,18 @@ router.get('/jobs', ingestionController.listJobs);
  */
 router.post('/rog/recalculate', ingestionController.recalcRoG);
 
+/**
+ * @route POST /api/v1/ingestion/enrich
+ * @desc Enrich all artists with social media data from external APIs
+ * @access Admin only
+ */
+router.post('/enrich', ingestionController.enrichArtists);
+
+/**
+ * @route POST /api/v1/ingestion/enrich/:id
+ * @desc Enrich a single artist with social media data
+ * @access Admin only
+ */
+router.post('/enrich/:id', ingestionController.enrichArtist);
+
 export default router;

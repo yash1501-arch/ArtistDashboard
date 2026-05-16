@@ -12,13 +12,6 @@ const router = Router();
 router.get('/', concertController.list);
 
 /**
- * @route GET /api/v1/concerts/:id
- * @desc Get single concert by ID
- * @access Public
- */
-router.get('/:id', concertController.getById);
-
-/**
  * @route POST /api/v1/concerts
  * @desc Create concert (admin only)
  * @access Private (Admin)
@@ -55,5 +48,55 @@ router.get('/cities', concertController.getCities);
  * @access Public
  */
 router.get('/venues', concertController.getVenues);
+
+/**
+ * @route GET /api/v1/concerts/pipeline/sources
+ * @desc List supported concert scraping sources
+ * @access Public
+ */
+router.get('/pipeline/sources', concertController.getPipelineSources);
+
+/**
+ * @route POST /api/v1/concerts/pipeline
+ * @desc Run concert scraping and ML pipeline for one artist or all active artists
+ * @access Private (Admin)
+ */
+router.post(
+  '/pipeline',
+  authenticate,
+  isAdmin,
+  concertController.runPipeline
+);
+
+/**
+ * @route POST /api/v1/concerts/pipeline/all
+ * @desc Run concert scraping and ML pipeline for every active artist
+ * @access Private (Admin)
+ */
+router.post(
+  '/pipeline/all',
+  authenticate,
+  isAdmin,
+  concertController.runPipelineForAllArtists
+);
+
+/**
+ * @route POST /api/v1/concerts/pipeline/artist
+ * @desc Backwards-compatible artist pipeline route
+ * @access Private (Admin)
+ */
+router.post(
+  '/pipeline/artist',
+  authenticate,
+  isAdmin,
+  concertController.runArtistPipeline
+);
+
+/**
+ * @route GET /api/v1/concerts/:id
+ * @desc Get single concert by ID
+ * @access Public
+ */
+router.get('/:id', concertController.getById);
 
 export default router;

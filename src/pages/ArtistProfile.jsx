@@ -191,15 +191,19 @@ function ArtistProfile() {
   const totalTickets = concerts.reduce((a, c) => a + Number(c.ticketsSold || 0), 0)
 
   // Transform concert data to match UI format
-  const transformedConcerts = concerts.map(c => ({
-    id: c.id,
-    name: c.concertName || 'Live Event',
-    date: c.concertDate ? new Date(c.concertDate) : new Date(),
-    city: c.city || 'TBA',
-    venue: c.venueName || 'TBA',
-    tickets_sold: Number(c.ticketsSold || 0),
-    total_revenue: Number(c.totalRevenue || 0),
-  }))
+  const transformedConcerts = concerts.map(c => {
+    const artist = c.artistName || c.artist?.artistName || 'Artist'
+    const venue = c.venueName || ''
+    return {
+      id: c.id,
+      name: venue ? `${artist} at ${venue}` : `${artist} in ${c.city || 'TBA'}`,
+      date: c.concertDate ? new Date(c.concertDate) : new Date(),
+      city: c.city || 'TBA',
+      venue: venue || 'TBA',
+      tickets_sold: Number(c.ticketsSold || 0),
+      total_revenue: Number(c.totalRevenue || 0),
+    }
+  })
 
   // Transform trends: aggregate metrics by date and platform
   const trendMap = new Map()

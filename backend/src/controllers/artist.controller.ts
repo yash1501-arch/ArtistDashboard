@@ -52,6 +52,10 @@ export const artistController = {
                 genre: true,
               },
             },
+            platformMetrics: {
+              orderBy: { metricDate: 'desc' },
+              take: 5,
+            },
           },
           skip,
           take: parseInt(limit as string),

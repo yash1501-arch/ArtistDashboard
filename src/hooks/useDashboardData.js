@@ -1,4 +1,4 @@
-import React from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import client from '../api/client'
 
@@ -7,25 +7,35 @@ const isAuthenticated = () => {
   return !!localStorage.getItem('token')
 }
 
-export function useDashboardData({ timeFilter = 12 } = {}) {
+const getArrayPayload = (payload, key) => {
+  if (Array.isArray(payload?.data?.[key])) return payload.data[key]
+  if (Array.isArray(payload?.data)) return payload.data
+  if (Array.isArray(payload?.[key])) return payload[key]
+  return []
+}
+
+const getArtistType = (nationality = '') => {
+  return nationality.toLowerCase().includes('india') ? 'indian' : 'international'
+}
+
+export function useDashboardData() {
   // Fetch KPIs
   const { data: kpisData, isLoading: kpisLoading, error: kpisError } = useQuery({
     queryKey: ['dashboard', 'kpis'],
     queryFn: async () => {
       const response = await client.get('/dashboard/kpis')
-      return response.data.data
+      return response.data?.data || {}
     },
     enabled: isAuthenticated(),
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 
   // Fetch top artists (get a larger pool to allow filtering by type)
-  const { data: topArtistsData, isLoading: topArtistsLoading, error: topArtistsError } = useQuery({
+  const { data: topArtistsData, isLoading: topArtistsLoading } = useQuery({
     queryKey: ['dashboard', 'top-artists'],
     queryFn: async () => {
       const response = await client.get('/dashboard/top-artists?limit=100')
-      // Assuming response.data.data.artists or response.data.artists based on dashboard controller
-      return response.data.data?.artists || response.data.artists || []
+      return getArrayPayload(response.data, 'artists')
     },
     staleTime: 5 * 60 * 1000,
     enabled: !!kpisData && isAuthenticated(),
@@ -36,7 +46,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
     queryKey: ['analytics', 'trends', 'instagram'],
     queryFn: async () => {
       const response = await client.get('/analytics/trends?metric=followers&platform=instagram')
-      return response.data?.trends || []
+      return getArrayPayload(response.data, 'trends')
     },
     staleTime: 10 * 60 * 1000,
     enabled: !!kpisData && isAuthenticated(),
@@ -46,7 +56,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
     queryKey: ['analytics', 'trends', 'youtube'],
     queryFn: async () => {
       const response = await client.get('/analytics/trends?metric=followers&platform=youtube')
-      return response.data?.trends || []
+      return getArrayPayload(response.data, 'trends')
     },
     staleTime: 10 * 60 * 1000,
     enabled: !!kpisData && isAuthenticated(),
@@ -56,18 +66,18 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
     queryKey: ['analytics', 'trends', 'spotify'],
     queryFn: async () => {
       const response = await client.get('/analytics/trends?metric=followers&platform=spotify')
-      return response.data?.trends || []
+      return getArrayPayload(response.data, 'trends')
     },
     staleTime: 10 * 60 * 1000,
     enabled: !!kpisData && isAuthenticated(),
   })
 
   // Fetch genre data
-  const { data: genresData, isLoading: genresLoading, error: genresError } = useQuery({
+  const { data: genresData, isLoading: genresLoading } = useQuery({
     queryKey: ['analytics', 'genres'],
     queryFn: async () => {
       const response = await client.get('/analytics/genres')
-      return response.data?.genres || []
+      return getArrayPayload(response.data, 'genres')
     },
     staleTime: 10 * 60 * 1000,
     enabled: !!kpisData && isAuthenticated(),
@@ -78,7 +88,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
     queryKey: ['artists', 'all-for-dashboard'],
     queryFn: async () => {
       const response = await client.get('/artists?limit=1000')
-      return response.data.data?.artists || []
+      return getArrayPayload(response.data, 'artists')
     },
     staleTime: 10 * 60 * 1000,
     enabled: !!kpisData && isAuthenticated(),
@@ -89,7 +99,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
     queryKey: ['concerts', 'all-for-dashboard'],
     queryFn: async () => {
       const response = await client.get('/concerts?limit=1000')
-      return response.data.data.concerts || []
+      return getArrayPayload(response.data, 'concerts')
     },
     staleTime: 10 * 60 * 1000,
     enabled: !!kpisData && isAuthenticated(),
@@ -100,7 +110,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
     queryKey: ['analytics', 'demographics', 'age'],
     queryFn: async () => {
       const response = await client.get('/analytics/demographics/age')
-      return response.data.data.breakdown || []
+      return getArrayPayload(response.data, 'breakdown')
     },
     staleTime: 15 * 60 * 1000,
     enabled: !!kpisData && isAuthenticated(),
@@ -110,7 +120,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
     queryKey: ['analytics', 'demographics', 'gender'],
     queryFn: async () => {
       const response = await client.get('/analytics/demographics/gender')
-      return response.data.data.breakdown || []
+      return getArrayPayload(response.data, 'breakdown')
     },
     staleTime: 15 * 60 * 1000,
     enabled: !!kpisData && isAuthenticated(),
@@ -120,49 +130,40 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
   const error = kpisError // only fail if KPIs fail, since it's the main data point. Others can be optional.
 
   // Build artistId -> type map (from all artists)
-  const artistTypeById = React.useMemo(() => {
+  const artistTypeById = useMemo(() => {
     if (!allArtistsRaw) return {}
     const map = {}
     allArtistsRaw.forEach(artist => {
-      const nationality = artist.nationality || ''
-      const type = nationality.toLowerCase().includes('india') ? 'indian' : 'international'
-      map[artist.id] = type
+      map[artist.id] = getArtistType(artist.nationality || '')
     })
     return map
   }, [allArtistsRaw])
 
-  // Build artistId -> name map for concert display
-  const artistNameMap = React.useMemo(() => {
-    if (!allArtistsRaw) return {}
-    const map = {}
-    allArtistsRaw.forEach(artist => {
-      map[artist.id] = artist.artistName
-    })
-    return map
-  }, [allArtistsRaw])
+  const rawKpis = kpisData?.kpis || kpisData
 
   // Transform KPIs
-  const kpis = kpisData ? {
-    totalArtists: kpisData.totalArtists || 0,
-    totalConcerts: kpisData.totalConcerts || 0,
-    ticketsSoldYTD: kpisData.ticketsSoldYTD || 0,
-    revenueYTD: kpisData.revenueYTD || 0,
-    avgRoG: kpisData.avgRoGDaily ? parseFloat(kpisData.avgRoGDaily.toFixed(2)) : 0,
-    topArtistByStreams: kpisData.topArtistByStreams || null,
+  const kpis = rawKpis ? {
+    totalArtists: rawKpis.totalArtists || 0,
+    totalConcerts: rawKpis.totalConcerts || 0,
+    ticketsSoldYTD: rawKpis.ticketsSoldYTD || 0,
+    revenueYTD: rawKpis.revenueYTD || 0,
+    avgRoG: rawKpis.avgRoGDaily ? parseFloat(rawKpis.avgRoGDaily.toFixed(2)) : 0,
+    topArtistByStreams: rawKpis.topArtistByStreams || null,
   } : null
 
   // Transform top artists: convert API format to UI format
   // We'll process all topArtistsData (pool) and then apply artistType filter and sorting on client
-  const transformedArtistsPool = React.useMemo(() => {
+  const transformedArtistsPool = useMemo(() => {
     if (!topArtistsData) return []
 
     return topArtistsData.map(item => {
       const artist = item.artist
+      if (!artist) return null
+
       const nationality = artist.nationality || ''
       const genres = artist.genres || []
-      // Use artistId to look up type from the artistTypeMap (built from all artists)
-      const type = artistTypeById[artist.id] || 'international'
-      const genre = genres.length > 0 ? genres[0].genre.name : 'Unknown'
+      const type = artistTypeById[artist.id] || getArtistType(nationality)
+      const genre = genres.length > 0 ? genres[0]?.genre?.name || 'Unknown' : 'Unknown'
 
       // Followers by platform
       const followers = {
@@ -182,18 +183,20 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
 
       if (item.platforms && Array.isArray(item.platforms)) {
         item.platforms.forEach(p => {
-          const key = p.platform.toLowerCase()
+          const key = String(p.platform || '').toLowerCase()
           if (key in followers) {
             followers[key] = p.followers || 0
           }
         })
       }
 
+      const totalFollowers = Number(item.totalFollowers || 0)
+
       // Normalized popularity (0-100). Assume 100M followers = 100
-      const popularity = Math.min(100, Math.round((item.totalFollowers || 0) / 1000000))
+      const popularity = Math.min(100, Math.round(totalFollowers / 1000000))
 
       // Approx monthly streams: 0.1% of total followers
-      const monthlyStreams = Math.round(item.totalFollowers * 0.001)
+      const monthlyStreams = Math.round(totalFollowers * 0.001)
 
       const photo = artist.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(artist.artistName)}&background=6366F1&color=fff`
 
@@ -210,13 +213,13 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
         followers,
         rog,
         photo,
-        totalFollowers: item.totalFollowers || 0,
+        totalFollowers,
       }
-    })
+    }).filter(Boolean)
   }, [topArtistsData, artistTypeById])
 
   // Compute totalConcerts per artist from allConcerts
-  const artistConcertCounts = React.useMemo(() => {
+  const artistConcertCounts = useMemo(() => {
     if (!allConcertsRaw) return {}
     const counts = {}
     allConcertsRaw.forEach(concert => {
@@ -227,7 +230,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
   }, [allConcertsRaw])
 
   // Combine transformedArtistsPool with concert counts:
-  const topArtistsWithConcerts = React.useMemo(() => {
+  const topArtistsWithConcerts = useMemo(() => {
     if (!transformedArtistsPool.length) return []
     return transformedArtistsPool.map(artist => ({
       ...artist,
@@ -236,7 +239,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
   }, [transformedArtistsPool, artistConcertCounts])
 
   // Transform age demographics
-  const ageData = React.useMemo(() => {
+  const ageData = useMemo(() => {
     if (!ageDemographicsData) return []
     return ageDemographicsData.map(item => ({
       name: capitalize(item.dimensionValue),
@@ -245,7 +248,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
   }, [ageDemographicsData])
 
   // Transform gender demographics
-  const genderData = React.useMemo(() => {
+  const genderData = useMemo(() => {
     if (!genderDemographicsData) return []
     return genderDemographicsData.map(item => ({
       name: capitalize(item.dimensionValue),
@@ -254,7 +257,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
   }, [genderDemographicsData])
 
   // Combine trends into followerTrends
-  const followerTrends = React.useMemo(() => {
+  const followerTrends = useMemo(() => {
     const allTrends = []
     const addTrends = (data, platform) => {
       if (!data || !Array.isArray(data)) return
@@ -282,7 +285,7 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
   }, [instagramTrends, youtubeTrends, spotifyTrends])
 
   // Transform genres
-  const genreData = React.useMemo(() => {
+  const genreData = useMemo(() => {
     if (!genresData) return []
     return genresData.map(g => ({
       genre: g.genreName,
@@ -291,26 +294,30 @@ export function useDashboardData({ timeFilter = 12 } = {}) {
   }, [genresData])
 
   // Transform concerts to match UI format
-  const transformedConcerts = React.useMemo(() => {
+  const transformedConcerts = useMemo(() => {
     if (!allConcertsRaw) return []
-    return allConcertsRaw.map(c => ({
-      id: c.id,
-      artistId: c.artistId, // Keep artistId for type filtering
-      artist: c.artist?.artistName || 'Unknown Artist',
-      name: c.concertName,
-      date: new Date(c.concertDate),
-      city: c.city,
-      state: c.state,
-      country: c.country,
-      venue: c.venueName,
-      capacity: c.capacity,
-      tickets_sold: c.ticketsSold,
-      avg_ticket_price: Number(c.avgTicketPrice || 0),
-      total_revenue: Number(c.totalRevenue || 0),
-      lat: Number(c.latitude || 0),
-      lng: Number(c.longitude || 0),
-      sponsors: c.sponsors || [],
-    }))
+    return allConcertsRaw.map(c => {
+      const artist = c.artist?.artistName || c.artistName || 'Unknown Artist'
+      const venue = c.venueName || ''
+      return {
+        id: c.id,
+        artistId: c.artistId,
+        artist,
+        name: venue ? `${artist} at ${venue}` : `${artist} in ${c.city}`,
+        date: new Date(c.concertDate),
+        city: c.city,
+        state: c.state,
+        country: c.country,
+        venue,
+        capacity: c.capacity,
+        tickets_sold: c.ticketsSold,
+        avg_ticket_price: Number(c.avgTicketPrice || 0),
+        total_revenue: Number(c.totalRevenue || 0),
+        lat: Number(c.latitude || 0),
+        lng: Number(c.longitude || 0),
+        sponsors: [],
+      }
+    })
   }, [allConcertsRaw])
 
   return {

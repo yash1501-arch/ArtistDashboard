@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import { prisma } from '../utils/database';
 import { CreateConcertInput, UpdateConcertInput } from '../validations/zodSchemas';
+import { concertPipelineService } from '../services/concertPipeline.service';
 
 export const concertController = {
   // List concerts with pagination and filters
@@ -289,6 +290,128 @@ export const concertController = {
       });
     } catch (error) {
       throw error;
+    }
+  },
+
+  // Trigger ML pipeline for an artist
+  runPipeline: async (req: any, res: Response) => {
+    try {
+      const { artistId, artistIds, startYear, endYear, maxPagesPerYear, dryRun } = req.body;
+      const selectedArtistIds = Array.isArray(artistIds)
+        ? artistIds
+        : artistId
+          ? [artistId]
+          : undefined;
+
+      const summary = await concertPipelineService.runPipeline({
+        artistIds: selectedArtistIds,
+        startYear: startYear ? Number(startYear) : undefined,
+        endYear: endYear ? Number(endYear) : undefined,
+        maxPagesPerYear: maxPagesPerYear ? Number(maxPagesPerYear) : undefined,
+        dryRun: Boolean(dryRun),
+        sources: ['SETLIST_FM'],
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: summary,
+        message: dryRun
+          ? 'Concert scraping dry run completed successfully'
+          : 'Concert scraping and revenue pipeline completed successfully',
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Internal server error'
+      });
+    }
+  },
+
+  // Trigger pipeline for every active artist in the DB
+  runPipelineForAllArtists: async (req: any, res: Response) => {
+    try {
+      const { startYear, endYear, maxPagesPerYear, dryRun } = req.body;
+
+      const summary = await concertPipelineService.runPipeline({
+        startYear: startYear ? Number(startYear) : undefined,
+        endYear: endYear ? Number(endYear) : undefined,
+        maxPagesPerYear: maxPagesPerYear ? Number(maxPagesPerYear) : undefined,
+        dryRun: Boolean(dryRun),
+        sources: ['SETLIST_FM'],
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: summary,
+        message: dryRun
+          ? 'All-artist concert scraping dry run completed successfully'
+          : 'All-artist concert scraping and revenue pipeline completed successfully',
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Internal server error'
+      });
+    }
+  },
+
+  // Document currently supported concert providers
+  getPipelineSources: async (_req: any, res: Response) => {
+    try {
+      return res.status(200).json({
+        success: true,
+        data: {
+          activeSources: [
+            {
+              key: 'SETLIST_FM',
+              name: 'setlist.fm',
+              requiredEnv: ['SETLISTFM_API_KEY'],
+              supportsHistoricalData: true,
+              notes: 'Used now for artist concert history from 2021 onward.',
+            },
+          ],
+          plannedSources: [
+            {
+              key: 'TICKETMASTER',
+              name: 'Ticketmaster Discovery API',
+              notes: 'Good for current/future events and venue metadata once an API key is added.',
+            },
+            {
+              key: 'BANDSINTOWN',
+              name: 'Bandsintown',
+              notes: 'Good supplemental artist event source once API access is added.',
+            },
+          ],
+        },
+      });
+    } catch (error) {
+      throw error;
+    }
+  },
+
+  // Backwards-compatible alias for old callers that sent only artistId
+  runArtistPipeline: async (req: any, res: Response) => {
+    try {
+      const { artistId } = req.body;
+      if (!artistId) {
+        return res.status(400).json({ success: false, message: 'artistId is required' });
+      }
+
+      const results = await concertPipelineService.runPipelineForArtist(artistId);
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          processedCount: results.length,
+          concerts: results
+        },
+        message: 'ML Pipeline executed successfully'
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Internal server error'
+      });
     }
   },
 };

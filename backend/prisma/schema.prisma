@@ -88,31 +88,73 @@ model PlatformMetric {
   @@map("platform_metrics")
 }
 
+model Venue {
+  id              String   @id @default(cuid())
+  name            String
+  city            String
+  state           String?
+  country         String
+  address         String?
+  latitude        Decimal? @db.Decimal(9, 6)
+  longitude       Decimal? @db.Decimal(9, 6)
+  capacityMin     Int?
+  capacityMax     Int?
+  avgCapacity     Int?
+  ticketPriceMin  Decimal? @db.Decimal(10, 2)
+  ticketPriceMax  Decimal? @db.Decimal(10, 2)
+  avgTicketPrice  Decimal? @db.Decimal(10, 2)
+  venueType       String?  // Stadium, Arena, Theater, Club, etc.
+  verified        Boolean  @default(false)
+  source          String?  // API, Manual, Scraped
+  sourceUrl       String?
+  lastUpdated     DateTime @default(now())
+  created_at      DateTime @default(now())
+
+  @@unique([name, city, country])
+  @@index([city, country])
+  @@map("venues")
+}
+
 model Concert {
-  id                   String   @id @default(dbgenerated("gen_random_uuid()"))
+  id                   String                    @id @default(dbgenerated("gen_random_uuid()"))
   artistId             String
-  artistName           String?   // ✅ added
-  concertDate          DateTime  @db.Date
+  artistName           String?
+  concertDate          DateTime                   @db.Date
   city                 String
   state                String?
   country              String
-  latitude             Decimal?  @db.Decimal(9, 6)
-  longitude            Decimal?  @db.Decimal(9, 6)
+  latitude             Decimal?                   @db.Decimal(9, 6)
+  longitude            Decimal?                   @db.Decimal(9, 6)
   venueName            String?
   capacity             Int?
-  ticketsSold          Int       @default(0)
-  avgTicketPrice       Decimal?  @db.Decimal(10, 2)
-  totalRevenue         Decimal?  @db.Decimal(14, 2)
-  currency             String    @default("INR")
+  ticketsSold          Int                        @default(0)
+  ticketPriceVip       Decimal?                   @db.Decimal(10, 2)
+  ticketPriceTier1     Decimal?                   @db.Decimal(10, 2)
+  ticketPriceTier2     Decimal?                   @db.Decimal(10, 2)
+  ticketPriceTier3     Decimal?                   @db.Decimal(10, 2)
+  avgTicketPrice       Decimal?                   @db.Decimal(10, 2)
+  totalRevenue         Decimal?                   @db.Decimal(14, 2)
+  currency             String                     @default("INR")
+  artistCityPopularity Decimal?                   @db.Decimal(5, 2)
+  demandScore          Decimal?                   @db.Decimal(5, 2)
   notes                String?
-  created_at           DateTime  @default(now())
-  // ❌ removed concertName
+  verificationStatus   ConcertVerificationStatus  @default(PENDING)
+  verifiedAt           DateTime?
+  verifiedBy           String?                    // User ID who verified
+  researchNotes        String?
+  source               String?                    // API, Manual, Scraped
+  sourceUrl            String?
+  created_at           DateTime                   @default(now())
   audienceDemographics AudienceDemographic[]
-  artist               Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  artist               Artist                     @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@index([artistId, concertDate])
   @@index([city])
   @@index([country])
+  @@index([verificationStatus])
+  @@index([concertDate])
+  @@index([source])
+  @@index([sourceUrl])
   @@map("concerts")
 }
 
@@ -175,9 +217,57 @@ model IngestionJob {
   @@map("ingestion_jobs")
 }
 
+model ConcertResearchJob {
+  id             String    @id @default(cuid())
+  concertId      String
+  status         JobStatus @default(PENDING)
+  sourcesChecked Json?     // Track which sources were checked
+  findings       Json?     // Research findings
+  confidence     Decimal?  @db.Decimal(3, 2) // 0.00 to 1.00
+  errorMessage   String?
+  startedAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@index([concertId])
+  @@index([status])
+  @@map("concert_research_jobs")
+}
+
+model PredictionTrainingData {
+  id               String   @id @default(cuid())
+  concertId        String
+  features         Json     // All features used for training
+  actualRevenue    Decimal? @db.Decimal(14, 2)
+  predictedRevenue Decimal? @db.Decimal(14, 2)
+  accuracy         Decimal? @db.Decimal(5, 2) // Percentage
+  modelVersion     String
+  createdAt        DateTime @default(now())
+
+  @@index([modelVersion])
+  @@map("prediction_training_data")
+}
+
+model PredictionModel {
+  id              String   @id @default(cuid())
+  name            String
+  version         String   @unique
+  modelType       String   // regression, classification, ensemble
+  accuracy        Decimal  @db.Decimal(5, 2)
+  features        Json     // List of features used
+  hyperparameters Json?
+  filePath        String   // Path to saved model file
+  isActive        Boolean  @default(false)
+  trainedAt       DateTime @default(now())
+  deployedAt      DateTime?
+
+  @@index([isActive])
+  @@map("prediction_models")
+}
+
 enum JobType {
   EXCEL_IMPORT
   PLATFORM_SYNC
+  CONCERT_RESEARCH
 }
 
 enum JobStatus {
@@ -213,4 +303,11 @@ enum DemographicDimension {
 enum UserRole {
   ADMIN
   VIEWER
+}
+
+enum ConcertVerificationStatus {
+  PENDING
+  RESEARCHING
+  VERIFIED
+  REJECTED
 }

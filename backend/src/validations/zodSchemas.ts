@@ -92,9 +92,15 @@ export const createConcertSchema = z.object({
   venueName: z.string().max(255).optional().nullable(),
   capacity: z.number().int().positive().optional().nullable(),
   ticketsSold: z.number().int().nonnegative().optional().nullable(),
+  ticketPriceVip: z.number().positive().optional().nullable(),
+  ticketPriceTier1: z.number().positive().optional().nullable(),
+  ticketPriceTier2: z.number().positive().optional().nullable(),
+  ticketPriceTier3: z.number().positive().optional().nullable(),
   avgTicketPrice: z.number().positive().optional().nullable(),
   totalRevenue: z.number().positive().optional().nullable(),
   currency: z.string().length(3).optional().default('INR'),
+  artistCityPopularity: z.number().min(0).max(100).optional().nullable(),
+  demandScore: z.number().min(0).max(100).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
 });
 
@@ -181,6 +187,51 @@ export const demographicsQuerySchema = z.object({
   dimension: z.enum(['AGE_GROUP', 'GENDER', 'GEOGRAPHY', 'GENRE']).optional(),
 });
 
+// Scraping schemas
+export const startScrapingSchema = z.object({
+  sources: z.array(z.string()).min(1, 'At least one source is required'),
+  dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+  dateTo: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+  artists: z.array(z.string()).optional(),
+  cities: z.array(z.string()).optional(),
+  autoVerify: z.boolean().optional().default(false),
+  enableWebSearch: z.boolean().optional().default(false),
+});
+
+export const verifyConcertsSchema = z.object({
+  concertIds: z.array(z.string()).min(1, 'At least one concert ID is required').max(100, 'Maximum 100 concerts at a time'),
+});
+
+export const predictConcertValueSchema = z.object({
+  venueCapacity: z.number().positive('Venue capacity must be positive'),
+  artistTier: z.number().int().min(1).max(3, 'Artist tier must be 1, 2, or 3'),
+  minTicketPrice: z.number().positive('Minimum ticket price must be positive'),
+  maxTicketPrice: z.number().positive('Maximum ticket price must be positive').optional(),
+  cityPopulation: z.number().positive().optional(),
+  isWeekend: z.boolean().optional(),
+  isHoliday: z.boolean().optional(),
+  daysUntilConcert: z.number().int().optional(),
+  artistInstagramFollowers: z.number().optional(),
+  artistSpotifyListeners: z.number().optional(),
+});
+
+export const classifyArtistTierSchema = z.object({
+  instagramFollowers: z.number().positive('Instagram followers must be positive'),
+  spotifyListeners: z.number().positive('Spotify listeners must be positive'),
+  youtubeSubscribers: z.number().optional(),
+  facebookFollowers: z.number().optional(),
+  twitterFollowers: z.number().optional(),
+});
+
+export const analyzeConcertPotentialSchema = z.object({
+  artistName: z.string().min(1, 'Artist name is required'),
+  venueCapacity: z.number().positive('Venue capacity must be positive'),
+  minTicketPrice: z.number().positive('Minimum ticket price must be positive'),
+  maxTicketPrice: z.number().positive().optional(),
+  city: z.string().optional().default('Mumbai'),
+  concertDate: z.string().optional(),
+});
+
 // Types for TypeScript
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateArtistInput = z.infer<typeof createArtistSchema>;
@@ -189,3 +240,8 @@ export type CreateConcertInput = z.infer<typeof createConcertSchema>;
 export type UpdateConcertInput = z.infer<typeof updateConcertSchema>;
 export type CreatePlatformMetricInput = z.infer<typeof createPlatformMetricSchema>;
 export type CreateAudienceDemographicInput = z.infer<typeof createAudienceDemographicSchema>;
+export type StartScrapingInput = z.infer<typeof startScrapingSchema>;
+export type VerifyConcertsInput = z.infer<typeof verifyConcertsSchema>;
+export type PredictConcertValueInput = z.infer<typeof predictConcertValueSchema>;
+export type ClassifyArtistTierInput = z.infer<typeof classifyArtistTierSchema>;
+export type AnalyzeConcertPotentialInput = z.infer<typeof analyzeConcertPotentialSchema>;

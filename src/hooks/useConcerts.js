@@ -4,7 +4,9 @@ import client from '../api/client'
 /**
  * Hook to fetch concerts with optional filters and infinite scrolling.
  */
-export function useConcerts({ city, startDate, endDate, limit = 50 } = {}) {
+export function useConcerts({ city, year, startDate, endDate, limit = 50 } = {}) {
+  const normalizedYear = year && /^\d{4}$/.test(String(year)) ? String(year) : ''
+
   const {
     data,
     fetchNextPage,
@@ -13,36 +15,45 @@ export function useConcerts({ city, startDate, endDate, limit = 50 } = {}) {
     isLoading,
     error,
   } = useInfiniteQuery({
-    queryKey: ['concerts', city, startDate, endDate],
+    queryKey: ['concerts', city, normalizedYear, startDate, endDate, limit],
     queryFn: async ({ pageParam = 1 }) => {
       const params = new URLSearchParams()
       if (city && city !== 'All') params.append('city', city)
-      if (startDate) params.append('startDate', startDate)
-      if (endDate) params.append('endDate', endDate)
+      if (normalizedYear) {
+        params.append('dateFrom', `${normalizedYear}-01-01`)
+        params.append('dateTo', `${normalizedYear}-12-31`)
+      } else {
+        if (startDate) params.append('dateFrom', startDate)
+        if (endDate) params.append('dateTo', endDate)
+      }
       params.append('page', pageParam.toString())
       params.append('limit', limit.toString())
 
       const response = await client.get(`/concerts?${params.toString()}`)
       const { concerts, pagination } = response?.data?.data || { concerts: [], pagination: {} }
       
-      const mapped = concerts.map(c => ({
-        id: c.id,
-        artistId: c.artistId,
-        artist: c.artist?.artistName || 'Unknown Artist',
-        name: c.concertName,
-        date: new Date(c.concertDate),
-        city: c.city,
-        state: c.state,
-        country: c.country,
-        venue: c.venueName,
-        capacity: c.capacity,
-        tickets_sold: c.ticketsSold,
-        avg_ticket_price: Number(c.avgTicketPrice || 0),
-        total_revenue: Number(c.totalRevenue || 0),
-        lat: Number(c.latitude || 0),
-        lng: Number(c.longitude || 0),
-        sponsors: c.sponsors || [],
-      }))
+      const mapped = concerts.map(c => {
+        const artist = c.artist?.artistName || c.artistName || 'Unknown Artist'
+        const venue = c.venueName || ''
+        return {
+          id: c.id,
+          artistId: c.artistId,
+          artist,
+          name: venue ? `${artist} at ${venue}` : `${artist} in ${c.city}`,
+          date: new Date(c.concertDate),
+          city: c.city,
+          state: c.state,
+          country: c.country,
+          venue,
+          capacity: c.capacity,
+          tickets_sold: c.ticketsSold,
+          avg_ticket_price: Number(c.avgTicketPrice || 0),
+          total_revenue: Number(c.totalRevenue || 0),
+          lat: Number(c.latitude || 0),
+          lng: Number(c.longitude || 0),
+          sponsors: [],
+        }
+      })
 
       return {
         concerts: mapped,
@@ -83,24 +94,26 @@ export function useConcertDetail(id) {
       const c = response?.data?.data?.concert
       if (!c) return null
 
+      const artist = c.artist?.artistName || c.artistName || 'Unknown Artist'
+      const venue = c.venueName || ''
       return {
         id: c.id,
         artistId: c.artistId,
-        artist: c.artist?.artistName || 'Unknown Artist',
-        name: c.concertName,
+        artist,
+        name: venue ? `${artist} at ${venue}` : `${artist} in ${c.city}`,
         date: new Date(c.concertDate),
         city: c.city,
         state: c.state,
         country: c.country,
-        venue: c.venueName,
+        venue,
         capacity: c.capacity,
         tickets_sold: c.ticketsSold,
         avg_ticket_price: Number(c.avgTicketPrice || 0),
         total_revenue: Number(c.totalRevenue || 0),
         lat: Number(c.latitude || 0),
         lng: Number(c.longitude || 0),
-        sponsors: c.sponsors || [], // Backend might not have this yet, but keeping for compatibility
-        audienceDemographics: c.audienceDemographics || []
+        sponsors: [],
+        audienceDemographics: c.audienceDemographics || [],
       }
     },
     enabled: !!id,
