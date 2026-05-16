@@ -52,3 +52,5 @@ backend/ml_engine/__pycache__/
 # Test and coverage reports
 backend/coverage/
 backend/test-reports/
+
+backend/ml_engine/models/*.joblib
