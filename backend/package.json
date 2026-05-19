@@ -46,6 +46,7 @@
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.2",
     "node-cron": "^3.0.3",
+    "playwright": "^1.56.1",
     "prisma": "^6.6.0",
     "redis": "^4.7.0",
     "swagger-jsdoc": "^6.2.8",

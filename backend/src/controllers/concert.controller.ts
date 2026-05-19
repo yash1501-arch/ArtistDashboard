@@ -2,6 +2,34 @@ import { Response } from 'express';
 import { prisma } from '../utils/database';
 import { CreateConcertInput, UpdateConcertInput } from '../validations/zodSchemas';
 import { concertPipelineService } from '../services/concertPipeline.service';
+import { concertIntelligenceService } from '../services/concertIntelligence.service';
+import { revenuePredictionService } from '../services/predictions/revenuePrediction.service';
+import { ConcertSourcePlatform } from '../services/scrapers/types';
+import { calculateConcertMetrics, calculateConcertRevenue, withCalculatedConcertRevenue } from '../utils/concertRevenue';
+
+const SUPPORTED_INTELLIGENCE_SOURCES: ConcertSourcePlatform[] = [
+  'BOOKMYSHOW',
+  'SONGKICK',
+  'BANDSINTOWN',
+  'EVENTBRITE',
+  'GOOGLE_CSE',
+];
+
+const parseOptionalDate = (value: unknown): Date | undefined => {
+  if (!value) return undefined;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+const parseSources = (value: unknown): ConcertSourcePlatform[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  const selected = value
+    .map((source) => String(source).toUpperCase())
+    .filter((source): source is ConcertSourcePlatform =>
+      SUPPORTED_INTELLIGENCE_SOURCES.includes(source as ConcertSourcePlatform)
+    );
+  return selected.length ? selected : undefined;
+};
 
 export const concertController = {
   // List concerts with pagination and filters
@@ -43,6 +71,16 @@ export const concertController = {
                 nationality: true,
               },
             },
+            predictionOutputs: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: {
+                expectedRevenue: true,
+                expectedAttendance: true,
+                demandScore: true,
+                features: true,
+              },
+            },
           },
           orderBy: { concertDate: 'desc' },
           skip,
@@ -54,7 +92,7 @@ export const concertController = {
       return res.status(200).json({
         success: true,
         data: {
-          concerts,
+          concerts: concerts.map(withCalculatedConcertRevenue),
           pagination: {
             page: parseInt(page as string),
             limit: parseInt(limit as string),
@@ -86,6 +124,16 @@ export const concertController = {
           audienceDemographics: {
             orderBy: { metricDate: 'desc' },
           },
+          predictionOutputs: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              expectedRevenue: true,
+              expectedAttendance: true,
+              demandScore: true,
+              features: true,
+            },
+          },
         },
       });
 
@@ -99,7 +147,7 @@ export const concertController = {
 
       return res.status(200).json({
         success: true,
-        data: { concert },
+        data: { concert: withCalculatedConcertRevenue(concert) },
       });
     } catch (error) {
       throw error;
@@ -133,6 +181,7 @@ export const concertController = {
       const concert = await prisma.concert.create({
         data: {
           ...filteredInput,
+          ...calculateConcertMetrics(filteredInput),
           concertDate,
         } as any,
         include: {
@@ -147,7 +196,7 @@ export const concertController = {
 
       return res.status(201).json({
         success: true,
-        data: { concert },
+        data: { concert: withCalculatedConcertRevenue(concert) },
         message: 'Concert created successfully',
       });
     } catch (error) {
@@ -176,6 +225,13 @@ export const concertController = {
         updateData.concertDate = new Date(input.concertDate);
       }
 
+      if (updateData.totalRevenue === undefined || updateData.totalRevenue === null || Number(updateData.totalRevenue) <= 0) {
+        const calculatedMetrics = calculateConcertMetrics({ ...existing, ...updateData });
+        Object.assign(updateData, calculatedMetrics);
+      } else {
+        Object.assign(updateData, calculateConcertMetrics({ ...existing, ...updateData }));
+      }
+
       const concert = await prisma.concert.update({
         where: { id },
         data: updateData,
@@ -191,7 +247,7 @@ export const concertController = {
 
       return res.status(200).json({
         success: true,
-        data: { concert },
+        data: { concert: withCalculatedConcertRevenue(concert) },
         message: 'Concert updated successfully',
       });
     } catch (error) {
@@ -355,6 +411,143 @@ export const concertController = {
     }
   },
 
+  // Run the multi-source concert intelligence pipeline
+  runIntelligencePipeline: async (req: any, res: Response) => {
+    try {
+      const {
+        sources,
+        artists,
+        cities,
+        country,
+        dateFrom,
+        dateTo,
+        limitPerSource,
+        maxPages,
+        dryRun,
+        runPredictions,
+        persistConcerts,
+        artistIds,
+        artistLimit,
+      } = req.body;
+
+      const shouldRunPredictions = runPredictions === undefined ? true : Boolean(runPredictions);
+      const summary = await concertIntelligenceService.runDiscoveryPipeline({
+        sources: parseSources(sources),
+        artistIds: Array.isArray(artistIds) ? artistIds.map(String) : undefined,
+        artists: Array.isArray(artists) ? artists.map(String) : undefined,
+        cities: Array.isArray(cities) ? cities.map(String) : undefined,
+        country: country ? String(country) : undefined,
+        dateFrom: parseOptionalDate(dateFrom),
+        dateTo: parseOptionalDate(dateTo),
+        limitPerSource: limitPerSource ? Number(limitPerSource) : undefined,
+        maxPages: maxPages ? Number(maxPages) : undefined,
+        dryRun: Boolean(dryRun),
+        runPredictions: shouldRunPredictions,
+        persistConcerts: persistConcerts === undefined ? true : Boolean(persistConcerts),
+        artistLimit: artistLimit ? Number(artistLimit) : undefined,
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: summary,
+        message: dryRun
+          ? 'Concert intelligence dry run completed successfully'
+          : shouldRunPredictions
+            ? 'Concert intelligence pipeline completed successfully'
+            : 'Concert scraping and validation completed successfully',
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Internal server error',
+      });
+    }
+  },
+
+  // Enqueue a scrape job for an external worker to process
+  enqueueIntelligencePipeline: async (req: any, res: Response) => {
+    try {
+      const { sources, artists, cities, country, dateFrom, dateTo, limitPerSource, maxPages } = req.body;
+      const jobId = await concertIntelligenceService.enqueueDiscoveryPipeline({
+        sources: parseSources(sources),
+        artistIds: Array.isArray(req.body.artistIds) ? req.body.artistIds.map(String) : undefined,
+        artists: Array.isArray(artists) ? artists.map(String) : undefined,
+        cities: Array.isArray(cities) ? cities.map(String) : undefined,
+        country: country ? String(country) : undefined,
+        dateFrom: parseOptionalDate(dateFrom),
+        dateTo: parseOptionalDate(dateTo),
+        limitPerSource: limitPerSource ? Number(limitPerSource) : undefined,
+        maxPages: maxPages ? Number(maxPages) : undefined,
+      });
+
+      return res.status(202).json({
+        success: true,
+        data: { jobId },
+        message: 'Concert intelligence scrape job enqueued',
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Internal server error',
+      });
+    }
+  },
+
+  // Revenue prediction endpoint for ML-ready consumers
+  predictRevenue: async (req: any, res: Response) => {
+    try {
+      const {
+        artist,
+        artistId,
+        city,
+        country,
+        venueName,
+        venue_capacity,
+        avg_ticket_price,
+        event_date,
+        canonicalEventId,
+        concertId,
+      } = req.body;
+
+      if (!artist || !city || !venue_capacity || !avg_ticket_price || !event_date) {
+        return res.status(400).json({
+          success: false,
+          message: 'artist, city, venue_capacity, avg_ticket_price, and event_date are required',
+        });
+      }
+
+      const prediction = await revenuePredictionService.predict({
+        artist: String(artist),
+        artistId: artistId ? String(artistId) : undefined,
+        city: String(city),
+        country: country ? String(country) : undefined,
+        venueName: venueName ? String(venueName) : undefined,
+        venue_capacity: Number(venue_capacity),
+        avg_ticket_price: Number(avg_ticket_price),
+        event_date,
+        canonicalEventId: canonicalEventId ? String(canonicalEventId) : undefined,
+        concertId: concertId ? String(concertId) : undefined,
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: {
+          expected_revenue: prediction.expected_revenue,
+          expected_attendance: prediction.expected_attendance,
+          sellout_probability: prediction.sellout_probability,
+          demand_score: prediction.demand_score,
+          model_version: prediction.model_version,
+          features: prediction.features,
+        },
+      });
+    } catch (error: any) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Internal server error',
+      });
+    }
+  },
+
   // Document currently supported concert providers
   getPipelineSources: async (_req: any, res: Response) => {
     try {
@@ -370,16 +563,39 @@ export const concertController = {
               notes: 'Used now for artist concert history from 2021 onward.',
             },
           ],
-          plannedSources: [
+          intelligenceSources: [
             {
-              key: 'TICKETMASTER',
-              name: 'Ticketmaster Discovery API',
-              notes: 'Good for current/future events and venue metadata once an API key is added.',
+              key: 'BOOKMYSHOW',
+              name: 'BookMyShow',
+              notes: 'Playwright source adapter for India-focused event discovery.',
+            },
+            {
+              key: 'SONGKICK',
+              name: 'Songkick',
+              notes: 'Playwright source adapter for artist and metro event discovery.',
             },
             {
               key: 'BANDSINTOWN',
               name: 'Bandsintown',
-              notes: 'Good supplemental artist event source once API access is added.',
+              notes: 'Playwright source adapter for artist tour pages and search results.',
+            },
+            {
+              key: 'EVENTBRITE',
+              name: 'Eventbrite',
+              notes: 'Playwright source adapter for city and artist music event searches.',
+            },
+            {
+              key: 'GOOGLE_CSE',
+              name: 'Google Custom Search',
+              requiredEnv: ['GOOGLE_SEARCH_API_KEY', 'GOOGLE_SEARCH_CX'],
+              notes: 'Searches configured event sites and extracts real Event/JSON-LD metadata from result pages.',
+            },
+          ],
+          plannedSources: [
+            {
+              key: 'TICKETMASTER',
+              name: 'Ticketmaster Discovery API',
+              notes: 'Good future extension for event discovery and venue metadata once an API key is added.',
             },
           ],
         },

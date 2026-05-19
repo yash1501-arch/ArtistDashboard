@@ -2,6 +2,7 @@ import { Response } from 'express';
 import * as xlsx from 'xlsx';
 import { prisma, redis } from '../utils/database';
 import { enrichAllArtists, enrichArtistById } from '../services/artistEnrichment.service';
+import { calculateConcertRevenue } from '../utils/concertRevenue';
 
 export const ingestionController = {
   // Upload Excel file for bulk import
@@ -86,7 +87,12 @@ export const ingestionController = {
                   country: row.Country || 'India',
                   venueName: row.Venue,
                   ticketsSold: row.TicketsSold || 0,
-                  totalRevenue: row.Revenue || 0,
+                  avgTicketPrice: row.AvgTicketPrice || row.AverageTicketPrice || row.TicketPrice || null,
+                  totalRevenue: calculateConcertRevenue({
+                    totalRevenue: row.Revenue,
+                    ticketsSold: row.TicketsSold,
+                    avgTicketPrice: row.AvgTicketPrice || row.AverageTicketPrice || row.TicketPrice,
+                  }),
                   notes: row.ConcertName || undefined,
                   source: 'EXCEL_IMPORT',
                 },

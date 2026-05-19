@@ -1,6 +1,12 @@
 import { Response } from 'express';
 import { prisma } from '../utils/database';
-import { CreateArtistInput, UpdateArtistInput } from '../validations/zodSchemas';
+import {
+  CreateArtistInput,
+  UpdateArtistInput,
+  createArtistSchema,
+  updateArtistSchema,
+} from '../validations/zodSchemas';
+import { withCalculatedConcertRevenue } from '../utils/concertRevenue';
 
 export const artistController = {
   // List artists with pagination, search, genre filter
@@ -101,6 +107,15 @@ export const artistController = {
           concerts: {
             take: 5,
             orderBy: { concertDate: 'desc' },
+            include: {
+              predictionOutputs: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+                select: {
+                  expectedRevenue: true,
+                },
+              },
+            },
           },
         },
       });
@@ -115,7 +130,12 @@ export const artistController = {
 
       return res.status(200).json({
         success: true,
-        data: { artist },
+        data: {
+          artist: {
+            ...artist,
+            concerts: artist.concerts.map(withCalculatedConcertRevenue),
+          },
+        },
       });
     } catch (error) {
       throw error;
@@ -125,7 +145,7 @@ export const artistController = {
   // Create artist (admin only)
   create: async (req: any, res: Response) => {
     try {
-      const input: CreateArtistInput = req.body;
+      const input: CreateArtistInput = createArtistSchema.parse(req.body);
 
       const { genreIds, ...artistData } = input;
 
@@ -172,7 +192,7 @@ export const artistController = {
   update: async (req: any, res: Response) => {
     try {
       const { id } = req.params;
-      const input: UpdateArtistInput = req.body;
+      const input: UpdateArtistInput = updateArtistSchema.parse(req.body);
 
       // Check if artist exists
       const existing = await prisma.artist.findUnique({ where: { id } });
@@ -335,11 +355,20 @@ export const artistController = {
         where: { artistId },
         orderBy: { concertDate: 'desc' },
         take: 100,
+        include: {
+          predictionOutputs: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              expectedRevenue: true,
+            },
+          },
+        },
       });
 
       return res.status(200).json({
         success: true,
-        data: { concerts },
+        data: { concerts: concerts.map(withCalculatedConcertRevenue) },
       });
     } catch (error) {
       throw error;

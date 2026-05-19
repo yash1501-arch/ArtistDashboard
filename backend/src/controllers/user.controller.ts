@@ -117,7 +117,7 @@ export const userController = {
       const { id } = req.params;
 
       // Prevent deleting the last admin if necessary, or self-deletion
-      if (req.user.userId === id) {
+      if (req.user?.userId === id) {
         return res.status(400).json({
           success: false,
           message: 'You cannot delete your own account',

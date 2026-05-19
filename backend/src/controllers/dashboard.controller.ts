@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import { prisma, redis } from '../utils/database';
+import { calculateConcertRevenue } from '../utils/concertRevenue';
 
 const CACHE_TTL = 60 * 60; // 1 hour
 
@@ -29,25 +30,27 @@ export const dashboardController = {
       // Total concerts (all time)
       const totalConcerts = await prisma.concert.count();
 
-      // Tickets sold YTD
-      const ticketsSoldYTD = await prisma.concert.aggregate({
+      // Concert totals YTD
+      const concertsYTD = await prisma.concert.findMany({
         where: {
           concertDate: { gte: startOfYear },
         },
-        _sum: {
+        select: {
+          totalRevenue: true,
           ticketsSold: true,
+          avgTicketPrice: true,
+          predictionOutputs: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              expectedRevenue: true,
+            },
+          },
         },
       });
 
-      // Total revenue YTD
-      const revenueYTD = await prisma.concert.aggregate({
-        where: {
-          concertDate: { gte: startOfYear },
-        },
-        _sum: {
-          totalRevenue: true,
-        },
-      });
+      const ticketsSoldYTD = concertsYTD.reduce((sum, concert) => sum + (concert.ticketsSold || 0), 0);
+      const revenueYTD = concertsYTD.reduce((sum, concert) => sum + calculateConcertRevenue(concert), 0);
 
       // Avg RoG across all platforms (last 30 days)
       const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -107,8 +110,8 @@ export const dashboardController = {
       const kpis = {
         totalArtists,
         totalConcerts,
-        ticketsSoldYTD: ticketsSoldYTD._sum.ticketsSold || 0,
-        revenueYTD: revenueYTD._sum.totalRevenue || 0,
+        ticketsSoldYTD,
+        revenueYTD,
         avgRoGDaily: avgRoG._avg.rogDaily ? parseFloat(avgRoG._avg.rogDaily.toFixed(2)) : 0,
         topArtistByStreams,
       };

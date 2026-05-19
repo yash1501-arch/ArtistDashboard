@@ -141,7 +141,7 @@ describe('Artist Controller', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
-          data: mockArtist,
+          data: { artist: mockArtist },
         })
       );
     });
@@ -209,7 +209,7 @@ describe('Artist Controller', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
-          data: mockNewArtist,
+          data: { artist: mockNewArtist },
         })
       );
     });
@@ -225,7 +225,7 @@ describe('Artist Controller', () => {
 
       await expect(
         artistController.create(mockRequest as Request, mockResponse as Response)
-      ).rejects.toThrow();
+      ).rejects.toMatchObject({ code: 'P2002' });
     });
 
     it('should validate required fields', async () => {
@@ -249,6 +249,9 @@ describe('Artist Controller', () => {
         id: 'artist-1',
         artistName: 'Updated Name',
       });
+      (prisma.artist.findUnique as jest.Mock)
+        .mockResolvedValueOnce({ id: 'artist-1' })
+        .mockResolvedValueOnce({ id: 'artist-1', artistName: 'Updated Name' });
 
       await artistController.update(mockRequest as Request, mockResponse as Response);
 
@@ -264,13 +267,17 @@ describe('Artist Controller', () => {
       mockRequest.params = { id: 'nonexistent' };
       mockRequest.body = { artistName: 'Updated Name' };
 
-      (prisma.artist.update as jest.Mock).mockRejectedValue(
-        new Error('Artist not found')
-      );
+      (prisma.artist.findUnique as jest.Mock).mockResolvedValue(null);
 
-      await expect(
-        artistController.update(mockRequest as Request, mockResponse as Response)
-      ).rejects.toThrow();
+      await artistController.update(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(404);
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          message: 'Artist not found',
+        })
+      );
     });
   });
 
@@ -278,7 +285,7 @@ describe('Artist Controller', () => {
     it('should delete an artist', async () => {
       mockRequest.params = { id: 'artist-1' };
 
-      (prisma.artist.delete as jest.Mock).mockResolvedValue({ id: 'artist-1' });
+      (prisma.artist.update as jest.Mock).mockResolvedValue({ id: 'artist-1', active: false });
 
       await artistController.delete(mockRequest as Request, mockResponse as Response);
 
@@ -286,7 +293,7 @@ describe('Artist Controller', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
-          message: 'Artist deleted successfully',
+          message: 'Artist deactivated successfully',
         })
       );
     });

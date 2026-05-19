@@ -37,6 +37,7 @@ model Artist {
   genres                  ArtistGenre[]
   audienceDemographics    AudienceDemographic[]
   concerts                Concert[]
+  featureSnapshots        FeatureSnapshot[]
   platformMetrics         PlatformMetric[]
 
   @@index([artistName])
@@ -89,26 +90,26 @@ model PlatformMetric {
 }
 
 model Venue {
-  id              String   @id @default(cuid())
-  name            String
-  city            String
-  state           String?
-  country         String
-  address         String?
-  latitude        Decimal? @db.Decimal(9, 6)
-  longitude       Decimal? @db.Decimal(9, 6)
-  capacityMin     Int?
-  capacityMax     Int?
-  avgCapacity     Int?
-  ticketPriceMin  Decimal? @db.Decimal(10, 2)
-  ticketPriceMax  Decimal? @db.Decimal(10, 2)
-  avgTicketPrice  Decimal? @db.Decimal(10, 2)
-  venueType       String?  // Stadium, Arena, Theater, Club, etc.
-  verified        Boolean  @default(false)
-  source          String?  // API, Manual, Scraped
-  sourceUrl       String?
-  lastUpdated     DateTime @default(now())
-  created_at      DateTime @default(now())
+  id             String   @id @default(cuid())
+  name           String
+  city           String
+  state          String?
+  country        String
+  address        String?
+  latitude       Decimal? @db.Decimal(9, 6)
+  longitude      Decimal? @db.Decimal(9, 6)
+  capacityMin    Int?
+  capacityMax    Int?
+  avgCapacity    Int?
+  ticketPriceMin Decimal? @db.Decimal(10, 2)
+  ticketPriceMax Decimal? @db.Decimal(10, 2)
+  avgTicketPrice Decimal? @db.Decimal(10, 2)
+  venueType      String?
+  verified       Boolean  @default(false)
+  source         String?
+  sourceUrl      String?
+  lastUpdated    DateTime @default(now())
+  created_at     DateTime @default(now())
 
   @@unique([name, city, country])
   @@index([city, country])
@@ -118,35 +119,39 @@ model Venue {
 model Concert {
   id                   String                    @id @default(dbgenerated("gen_random_uuid()"))
   artistId             String
-  artistName           String?
-  concertDate          DateTime                   @db.Date
+  concertDate          DateTime                  @db.Date
   city                 String
   state                String?
   country              String
-  latitude             Decimal?                   @db.Decimal(9, 6)
-  longitude            Decimal?                   @db.Decimal(9, 6)
+  latitude             Decimal?                  @db.Decimal(9, 6)
+  longitude            Decimal?                  @db.Decimal(9, 6)
   venueName            String?
   capacity             Int?
-  ticketsSold          Int                        @default(0)
-  ticketPriceVip       Decimal?                   @db.Decimal(10, 2)
-  ticketPriceTier1     Decimal?                   @db.Decimal(10, 2)
-  ticketPriceTier2     Decimal?                   @db.Decimal(10, 2)
-  ticketPriceTier3     Decimal?                   @db.Decimal(10, 2)
-  avgTicketPrice       Decimal?                   @db.Decimal(10, 2)
-  totalRevenue         Decimal?                   @db.Decimal(14, 2)
-  currency             String                     @default("INR")
-  artistCityPopularity Decimal?                   @db.Decimal(5, 2)
-  demandScore          Decimal?                   @db.Decimal(5, 2)
+  ticketsSold          Int                       @default(0)
+  avgTicketPrice       Decimal?                  @db.Decimal(10, 2)
+  totalRevenue         Decimal?                  @db.Decimal(14, 2)
+  currency             String                    @default("INR")
   notes                String?
-  verificationStatus   ConcertVerificationStatus  @default(PENDING)
-  verifiedAt           DateTime?
-  verifiedBy           String?                    // User ID who verified
+  created_at           DateTime                  @default(now())
+  artistName           String?
   researchNotes        String?
-  source               String?                    // API, Manual, Scraped
+  source               String?
   sourceUrl            String?
-  created_at           DateTime                   @default(now())
+  verificationStatus   ConcertVerificationStatus @default(PENDING)
+  verifiedAt           DateTime?
+  verifiedBy           String?
+  ticketPriceVip       Decimal?                  @db.Decimal(10, 2)
+  ticketPriceTier1     Decimal?                  @db.Decimal(10, 2)
+  ticketPriceTier2     Decimal?                  @db.Decimal(10, 2)
+  ticketPriceTier3     Decimal?                  @db.Decimal(10, 2)
+  artistCityPopularity Decimal?                  @db.Decimal(5, 2)
+  demandScore          Decimal?                  @db.Decimal(5, 2)
   audienceDemographics AudienceDemographic[]
-  artist               Artist                     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  canonicalEvents      CanonicalEvent[]
+  artist               Artist                    @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  featureSnapshots     FeatureSnapshot[]
+  predictionOutputs    PredictionOutput[]
+  validationLogs       ValidationLog[]
 
   @@index([artistId, concertDate])
   @@index([city])
@@ -221,9 +226,9 @@ model ConcertResearchJob {
   id             String    @id @default(cuid())
   concertId      String
   status         JobStatus @default(PENDING)
-  sourcesChecked Json?     // Track which sources were checked
-  findings       Json?     // Research findings
-  confidence     Decimal?  @db.Decimal(3, 2) // 0.00 to 1.00
+  sourcesChecked Json?
+  findings       Json?
+  confidence     Decimal?  @db.Decimal(3, 2)
   errorMessage   String?
   startedAt      DateTime  @default(now())
   completedAt    DateTime?
@@ -233,13 +238,161 @@ model ConcertResearchJob {
   @@map("concert_research_jobs")
 }
 
+model CanonicalEvent {
+  id                    String                 @id @default(cuid())
+  artistName            String
+  normalizedArtistName  String
+  eventName             String?
+  venueName             String
+  normalizedVenueName   String
+  city                  String
+  normalizedCity        String
+  country               String
+  eventDate             DateTime               @db.Date
+  sourcePlatform        String
+  sourceUrl             String?
+  ticketPriceRange      Json?
+  confidenceScore       Decimal                @default(0) @db.Decimal(5, 4)
+  fraudRiskScore        Decimal?               @db.Decimal(5, 4)
+  validationStatus      EventValidationStatus  @default(PENDING)
+  canonicalKey          String                 @unique
+  embedding             Json?
+  rawPayload            Json?
+  concertId             String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  concert               Concert?               @relation(fields: [concertId], references: [id])
+  duplicateGroupMembers DuplicateGroupMember[]
+  duplicateGroups       DuplicateGroup[]
+  featureSnapshots      FeatureSnapshot[]
+  predictionOutputs     PredictionOutput[]
+  sourceReferences      SourceEventReference[]
+  validationLogs        ValidationLog[]
+
+  @@index([normalizedArtistName, eventDate])
+  @@index([validationStatus])
+  @@index([sourcePlatform])
+  @@index([normalizedVenueName, normalizedCity, eventDate], map: "canonical_events_normalizedVenueName_normalizedCity_eventDate_i")
+  @@map("canonical_events")
+}
+
+model SourceEventReference {
+  id               String         @id @default(cuid())
+  canonicalEventId String
+  sourcePlatform   String
+  sourceEventId    String?
+  sourceUrl        String?
+  sourceEventKey   String         @unique
+  rawPayload       Json?
+  confidenceScore  Decimal        @default(0) @db.Decimal(5, 4)
+  firstSeenAt      DateTime       @default(now())
+  lastSeenAt       DateTime       @updatedAt
+  canonicalEvent   CanonicalEvent @relation(fields: [canonicalEventId], references: [id], onDelete: Cascade)
+
+  @@index([canonicalEventId])
+  @@index([sourcePlatform])
+  @@map("source_event_references")
+}
+
+model DuplicateGroup {
+  id               String                 @id @default(cuid())
+  canonicalEventId String?
+  status           DuplicateGroupStatus   @default(OPEN)
+  similarityScore  Decimal?               @db.Decimal(5, 4)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  members          DuplicateGroupMember[]
+  canonicalEvent   CanonicalEvent?        @relation(fields: [canonicalEventId], references: [id])
+
+  @@index([canonicalEventId])
+  @@index([status])
+  @@map("duplicate_groups")
+}
+
+model DuplicateGroupMember {
+  id               String              @id @default(cuid())
+  groupId          String
+  canonicalEventId String
+  role             DuplicateMemberRole @default(CANDIDATE)
+  similarityScore  Decimal             @default(0) @db.Decimal(5, 4)
+  reasons          Json?
+  createdAt        DateTime            @default(now())
+  canonicalEvent   CanonicalEvent      @relation(fields: [canonicalEventId], references: [id], onDelete: Cascade)
+  group            DuplicateGroup      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, canonicalEventId])
+  @@index([canonicalEventId])
+  @@map("duplicate_group_members")
+}
+
+model ValidationLog {
+  id                String                @id @default(cuid())
+  canonicalEventId  String?
+  concertId         String?
+  sourcePlatform    String?
+  confidenceScore   Decimal               @db.Decimal(5, 4)
+  fraudRiskScore    Decimal               @db.Decimal(5, 4)
+  validationStatus  EventValidationStatus
+  validationReasons Json
+  ruleScores        Json?
+  mlSignals         Json?
+  createdAt         DateTime              @default(now())
+  canonicalEvent    CanonicalEvent?       @relation(fields: [canonicalEventId], references: [id])
+  concert           Concert?              @relation(fields: [concertId], references: [id])
+
+  @@index([canonicalEventId])
+  @@index([concertId])
+  @@index([validationStatus])
+  @@map("validation_logs")
+}
+
+model PredictionOutput {
+  id                 String          @id @default(cuid())
+  canonicalEventId   String?
+  concertId          String?
+  modelVersion       String
+  input              Json
+  features           Json
+  expectedRevenue    Decimal         @db.Decimal(14, 2)
+  expectedAttendance Int
+  selloutProbability Decimal         @db.Decimal(5, 4)
+  demandScore        Decimal         @db.Decimal(5, 2)
+  createdAt          DateTime        @default(now())
+  canonicalEvent     CanonicalEvent? @relation(fields: [canonicalEventId], references: [id])
+  concert            Concert?        @relation(fields: [concertId], references: [id])
+
+  @@index([canonicalEventId])
+  @@index([concertId])
+  @@index([modelVersion])
+  @@map("prediction_outputs")
+}
+
+model FeatureSnapshot {
+  id                String          @id @default(cuid())
+  canonicalEventId  String?
+  artistId          String?
+  concertId         String?
+  featureSetVersion String
+  features          Json
+  createdAt         DateTime        @default(now())
+  artist            Artist?         @relation(fields: [artistId], references: [id])
+  canonicalEvent    CanonicalEvent? @relation(fields: [canonicalEventId], references: [id])
+  concert           Concert?        @relation(fields: [concertId], references: [id])
+
+  @@index([canonicalEventId])
+  @@index([artistId])
+  @@index([concertId])
+  @@index([featureSetVersion])
+  @@map("feature_snapshots")
+}
+
 model PredictionTrainingData {
   id               String   @id @default(cuid())
   concertId        String
-  features         Json     // All features used for training
+  features         Json
   actualRevenue    Decimal? @db.Decimal(14, 2)
   predictedRevenue Decimal? @db.Decimal(14, 2)
-  accuracy         Decimal? @db.Decimal(5, 2) // Percentage
+  accuracy         Decimal? @db.Decimal(5, 2)
   modelVersion     String
   createdAt        DateTime @default(now())
 
@@ -248,16 +401,16 @@ model PredictionTrainingData {
 }
 
 model PredictionModel {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   name            String
-  version         String   @unique
-  modelType       String   // regression, classification, ensemble
-  accuracy        Decimal  @db.Decimal(5, 2)
-  features        Json     // List of features used
+  version         String    @unique
+  modelType       String
+  accuracy        Decimal   @db.Decimal(5, 2)
+  features        Json
   hyperparameters Json?
-  filePath        String   // Path to saved model file
-  isActive        Boolean  @default(false)
-  trainedAt       DateTime @default(now())
+  filePath        String
+  isActive        Boolean   @default(false)
+  trainedAt       DateTime  @default(now())
   deployedAt      DateTime?
 
   @@index([isActive])
@@ -268,6 +421,7 @@ enum JobType {
   EXCEL_IMPORT
   PLATFORM_SYNC
   CONCERT_RESEARCH
+  CONCERT_SCRAPE
 }
 
 enum JobStatus {
@@ -310,4 +464,24 @@ enum ConcertVerificationStatus {
   RESEARCHING
   VERIFIED
   REJECTED
+}
+
+enum EventValidationStatus {
+  PENDING
+  VALIDATED
+  REJECTED
+  REVIEW_REQUIRED
+  DUPLICATE
+}
+
+enum DuplicateGroupStatus {
+  OPEN
+  MERGED
+  DISMISSED
+}
+
+enum DuplicateMemberRole {
+  CANONICAL
+  DUPLICATE
+  CANDIDATE
 }

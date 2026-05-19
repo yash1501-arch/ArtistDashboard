@@ -81,6 +81,42 @@ router.post(
 );
 
 /**
+ * @route POST /api/v1/concerts/intelligence
+ * @desc Run multi-layer concert discovery, normalization, dedupe, validation, and prediction
+ * @access Private (Admin)
+ */
+router.post(
+  '/intelligence',
+  authenticate,
+  isAdmin,
+  concertController.runIntelligencePipeline
+);
+
+/**
+ * @route POST /api/v1/concerts/intelligence/queue
+ * @desc Enqueue a queue-ready concert intelligence scraping job
+ * @access Private (Admin)
+ */
+router.post(
+  '/intelligence/queue',
+  authenticate,
+  isAdmin,
+  concertController.enqueueIntelligencePipeline
+);
+
+/**
+ * @route POST /api/v1/concerts/predictions/revenue
+ * @desc Predict concert revenue, attendance, sellout probability, and demand score
+ * @access Private (Admin)
+ */
+router.post(
+  '/predictions/revenue',
+  authenticate,
+  isAdmin,
+  concertController.predictRevenue
+);
+
+/**
  * @route POST /api/v1/concerts/pipeline/artist
  * @desc Backwards-compatible artist pipeline route
  * @access Private (Admin)

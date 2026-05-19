@@ -3,8 +3,10 @@ import { Prisma } from '@prisma/client';
 
 export interface ApiError extends Error {
   statusCode?: number;
+  status?: number | string;
   code?: string;
-  status?: string;
+  type?: string;
+  expose?: boolean;
   errors?: any;
 }
 
@@ -14,15 +16,30 @@ export const errorHandler = (
   _res: Response,
   _next: NextFunction
 ) => {
-  console.error('Error:', err);
+  if (process.env.NODE_ENV !== 'test') {
+    console.error('Error:', err);
+  }
 
   // Use _res to reply (it's typed as Response despite the underscore)
   const res = _res;
 
   const isProduction = process.env.NODE_ENV === 'production';
 
+  // Express/body-parser errors
+  const parserStatus = err.statusCode || (typeof err.status === 'number' ? err.status : undefined);
+  if (parserStatus && parserStatus >= 400 && parserStatus < 500) {
+    return res.status(parserStatus).json({
+      success: false,
+      message: err.expose ? err.message : 'Invalid request',
+      code: err.type === 'entity.too.large' ? 'PAYLOAD_TOO_LARGE' : 'BAD_REQUEST',
+    });
+  }
+
   // Prisma validation errors
-  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+  if (
+    typeof Prisma.PrismaClientKnownRequestError === 'function' &&
+    err instanceof Prisma.PrismaClientKnownRequestError
+  ) {
     return res.status(400).json({
       success: false,
       message: 'Database operation failed',
@@ -32,7 +49,10 @@ export const errorHandler = (
   }
 
   // Prisma validation errors (like unique constraint)
-  if (err instanceof Prisma.PrismaClientValidationError) {
+  if (
+    typeof Prisma.PrismaClientValidationError === 'function' &&
+    err instanceof Prisma.PrismaClientValidationError
+  ) {
     return res.status(400).json({
       success: false,
       message: 'Invalid data provided',

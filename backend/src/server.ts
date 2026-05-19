@@ -19,6 +19,7 @@ import concertRoutes from './routes/concert.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import dashboardRoutes from './routes/dashboard.routes';
 import ingestionRoutes from './routes/ingestion.routes';
+import scrapingRoutes from './routes/scraping.routes';
 import userRoutes from './routes/user.routes';
 import { PrismaClient } from '@prisma/client';
 import { connectRedis } from './utils/database';
@@ -97,6 +98,7 @@ app.get('/api/v1', (_req, res) => {
       analytics: '/api/v1/analytics',
       dashboard: '/api/v1/dashboard',
       ingestion: '/api/v1/ingestion',
+      scraping: '/api/v1/scraping',
     },
   });
 });
@@ -108,6 +110,7 @@ app.use('/api/v1/concerts', concertRoutes);
 app.use('/api/v1/analytics', analyticsRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/ingestion', ingestionRoutes);
+app.use('/api/v1/scraping', scrapingRoutes);
 app.use('/api/v1/users', userRoutes);
 
 // 404 handler

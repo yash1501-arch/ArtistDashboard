@@ -132,19 +132,43 @@ describe('Auth Controller - Login', () => {
     it('should reject login with missing email', async () => {
       mockRequest.body = { password: 'password123' };
 
-      await expect(login(mockRequest as Request, mockResponse as Response)).rejects.toThrow();
+      await login(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          code: 'VALIDATION_ERROR',
+        })
+      );
     });
 
     it('should reject login with missing password', async () => {
       mockRequest.body = { email: 'test@example.com' };
 
-      await expect(login(mockRequest as Request, mockResponse as Response)).rejects.toThrow();
+      await login(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          code: 'VALIDATION_ERROR',
+        })
+      );
     });
 
     it('should reject login with invalid email format', async () => {
       mockRequest.body = { email: 'not-an-email', password: 'password123' };
 
-      await expect(login(mockRequest as Request, mockResponse as Response)).rejects.toThrow();
+      await login(mockRequest as Request, mockResponse as Response);
+
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockResponse.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          code: 'VALIDATION_ERROR',
+        })
+      );
     });
   });
 

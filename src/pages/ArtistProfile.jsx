@@ -15,14 +15,14 @@ const TABS = ['Platforms', 'Growth Trends', 'Concerts', 'Demographics']
 
 const PLATFORM_META = {
   instagram: { label: 'Instagram', color: '#E1306C' },
-  youtube:   { label: 'YouTube',   color: '#FF0000' },
-  spotify:   { label: 'Spotify',   color: '#1DB954' },
+  youtube: { label: 'YouTube', color: '#FF0000' },
+  spotify: { label: 'Spotify', color: '#1DB954' },
 }
 
 const TREND_LINES = [
   { key: 'instagram', label: 'Instagram', color: '#E1306C' },
-  { key: 'youtube',   label: 'YouTube',   color: '#FF0000' },
-  { key: 'spotify',   label: 'Spotify',   color: '#1DB954' },
+  { key: 'youtube', label: 'YouTube', color: '#FF0000' },
+  { key: 'spotify', label: 'Spotify', color: '#1DB954' },
 ]
 
 function ArtistProfile() {
@@ -106,7 +106,7 @@ function ArtistProfile() {
               <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-3" />
               <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4 mb-4" />
               <div className="grid grid-cols-4 gap-3">
-                {[1,2,3,4].map(i => (
+                {[1, 2, 3, 4].map(i => (
                   <div key={i} className="h-16 bg-gray-200 dark:bg-gray-700 rounded-xl" />
                 ))}
               </div>
@@ -169,11 +169,11 @@ function ArtistProfile() {
   })
 
   const followers = {
-    instagram: followerMap.get('instagram') || Number(artist.instagramFollowers || 0),
-    youtube: followerMap.get('youtube') || Number(artist.youtubeSubscribers || 0),
-    spotify: followerMap.get('spotify') || Number(artist.spotifyMonthlyListeners || 0),
-    facebook: followerMap.get('facebook') || Number(artist.facebookFollowers || 0),
-    applemusic: followerMap.get('applemusic') || Number(artist.appleMusicListeners || 0),
+    instagram: followerMap.get('instagram') || 0,
+    youtube: followerMap.get('youtube') || 0,
+    spotify: followerMap.get('spotify') || 0,
+    facebook: followerMap.get('facebook') || 0,
+    applemusic: followerMap.get('applemusic') || 0,
   }
 
   const rog = {
@@ -185,34 +185,27 @@ function ArtistProfile() {
   }
 
   // Calculate totals
-  const totalFollowers = Object.values(followers).reduce((a, b) => a + Number(b || 0), 0)
-  const avgRoG = Object.values(rog).reduce((a, b) => a + Number(b || 0), 0) / (Object.keys(rog).length || 1)
-  const totalRevenue = concerts.reduce((a, c) => a + Number(c.totalRevenue || 0), 0)
-  const totalTickets = concerts.reduce((a, c) => a + Number(c.ticketsSold || 0), 0)
+  const totalFollowers = Object.values(followers).reduce((a, b) => a + b, 0)
+  const avgRoG = Object.values(rog).reduce((a, b) => a + b, 0) / Object.keys(rog).length
+  const totalRevenue = concerts.reduce((a, c) => a + (c.totalRevenue || 0), 0)
+  const totalTickets = concerts.reduce((a, c) => a + (c.ticketsSold || 0), 0)
 
   // Transform concert data to match UI format
-  const transformedConcerts = concerts.map(c => {
-    const artist = c.artistName || c.artist?.artistName || 'Artist'
-    const venue = c.venueName || ''
-    return {
-      id: c.id,
-      name: venue ? `${artist} at ${venue}` : `${artist} in ${c.city || 'TBA'}`,
-      date: c.concertDate ? new Date(c.concertDate) : new Date(),
-      city: c.city || 'TBA',
-      venue: venue || 'TBA',
-      tickets_sold: Number(c.ticketsSold || 0),
-      total_revenue: Number(c.totalRevenue || 0),
-    }
-  })
+  const transformedConcerts = concerts.map(c => ({
+    id: c.id,
+    name: c.concertName,
+    date: c.concertDate,
+    city: c.city,
+    venue: c.venueName,
+    tickets_sold: c.ticketsSold,
+    total_revenue: c.totalRevenue,
+  }))
 
   // Transform trends: aggregate metrics by date and platform
   const trendMap = new Map()
 
   allMetrics?.forEach((metric) => {
-    const rawDate = metric.metricDate ? new Date(metric.metricDate) : new Date()
-    const dateStr = isNaN(rawDate.getTime()) 
-      ? 'Unknown' 
-      : rawDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    const dateStr = new Date(metric.metricDate).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     const platform = (metric.platform || '').toLowerCase()
     const followers = Number(metric.followers) || 0
 
@@ -227,18 +220,14 @@ function ArtistProfile() {
   })
 
   const trendData = Array.from(trendMap.values())
-    .sort((a, b) => {
-      if (a.date === 'Unknown') return 1
-      if (b.date === 'Unknown') return -1
-      return new Date(a.date).getTime() - new Date(b.date).getTime()
-    })
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
 
   // Transform demographics for pie charts (group by dimensionValue and sum absoluteCount)
   const groupDemographics = (data) => {
     const map = new Map()
     data?.forEach(d => {
       const key = d.dimensionValue || 'Unknown'
-      const count = d.absoluteCount != null ? Number(d.absoluteCount) : 0
+      const count = d.absoluteCount != null ? d.absoluteCount : 0
       map.set(key, (map.get(key) || 0) + count)
     })
     return Array.from(map.entries()).map(([name, value]) => ({ name, value }))
@@ -266,10 +255,10 @@ function ArtistProfile() {
         <div className="absolute inset-0 pointer-events-none"
           style={{ background: 'radial-gradient(circle at 100% 0%, rgba(99,102,241,0.06), transparent 60%)' }} />
 
-        <div className="flex flex-col sm:flex-row items-center gap-6 relative z-10">
+        <div className="flex flex-col sm:flex-row items-start gap-6 relative z-10">
           {/* Avatar */}
           <div className="relative flex-shrink-0">
-            <img src={artist.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(artist.artistName || 'Unknown')}&background=6366F1&color=fff`} alt={artist.artistName || 'Unknown'}
+            <img src={artist.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(artist.name)}&background=6366F1&color=fff`} alt={artist.name}
               className="w-24 h-24 rounded-2xl object-cover"
               style={{ border: '2px solid var(--border-strong)', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }} />
             <div className="absolute -bottom-2 -right-2 px-2 py-0.5 rounded-lg text-xs font-bold"
@@ -282,7 +271,7 @@ function ArtistProfile() {
           <div className="flex-1">
             <div className="flex flex-wrap items-center gap-3 mb-2">
               <h1 className="font-display font-bold text-3xl" style={{ color: 'var(--text-primary)' }}>
-                {artist.artistName || artist.displayName || 'Unknown Artist'}
+                {artist.name}
               </h1>
               <RoGBadge value={avgRoG} />
             </div>
@@ -300,10 +289,10 @@ function ArtistProfile() {
             {/* KPI Strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: 'Total Followers', value: formatNumber(totalFollowers), icon: Users,      color: 'var(--accent-indigo)' },
-                { label: 'Top Platform',    value: Object.entries(followers).sort((a,b) => b[1]-a[1])[0][0] || 'N/A', icon: TrendingUp, color: 'var(--accent-gold)' },
-                { label: 'Total Revenue',   value: formatCurrency(totalRevenue), icon: DollarSign, color: 'var(--accent-green)'  },
-                { label: 'Tickets Sold',    value: formatNumber(totalTickets),   icon: Ticket,     color: 'var(--accent-red)'    },
+                { label: 'Total Followers', value: formatNumber(totalFollowers), icon: Users, color: 'var(--accent-indigo)' },
+                { label: 'Top Platform', value: Object.entries(followers).sort((a, b) => b[1] - a[1])[0][0] || 'N/A', icon: TrendingUp, color: 'var(--accent-gold)' },
+                { label: 'Total Revenue', value: formatCurrency(totalRevenue), icon: DollarSign, color: 'var(--accent-green)' },
+                { label: 'Tickets Sold', value: formatNumber(totalTickets), icon: Ticket, color: 'var(--accent-red)' },
               ].map((stat, i) => (
                 <div key={i} className="rounded-xl p-3"
                   style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>

@@ -12,6 +12,14 @@ const PLATFORMS = [
   { key: 'twitter',    label: 'Twitter / X', color: '#000000' },
 ]
 
+const SCRAPE_SOURCES = [
+  { key: 'BOOKMYSHOW', label: 'BookMyShow' },
+  { key: 'SONGKICK', label: 'Songkick' },
+  { key: 'BANDSINTOWN', label: 'Bandsintown' },
+  { key: 'EVENTBRITE', label: 'Eventbrite' },
+  { key: 'GOOGLE_CSE', label: 'Google CSE' },
+]
+
 const STATUS_META = {
   SUCCESS: { icon: CheckCircle, color: 'var(--accent-green)', bg: 'rgba(16,185,129,0.12)',  label: 'Success' },
   FAILED:  { icon: XCircle,     color: 'var(--accent-red)',   bg: 'rgba(239,68,68,0.12)',   label: 'Failed'  },
@@ -39,6 +47,15 @@ function AdminIngestion() {
 
   const jobs = jobsData || []
 
+  const { data: artistOptions = [] } = useQuery({
+    queryKey: ['artists', 'scrape-options'],
+    queryFn: async () => {
+      const response = await client.get('/artists?limit=100')
+      return response.data.data?.artists || []
+    },
+    staleTime: 2 * 60 * 1000,
+  })
+
   // Sync platform mutation
   const syncMutation = useMutation({
     mutationFn: (platform) => client.post(`/ingestion/sync/${platform}`),
@@ -56,15 +73,30 @@ function AdminIngestion() {
 
   // Scrape concerts mutation
   const scrapeMutation = useMutation({
-    mutationFn: ({ sources, dateFrom, dateTo }) =>
-      client.post('/scraping/start', { sources, dateFrom, dateTo }),
-    onSuccess: () => queryClient.invalidateQueries(['ingestionJobs'])
+    mutationFn: ({ sources, dateFrom, dateTo, artistIds, country }) =>
+      client.post('/concerts/intelligence', {
+        sources,
+        artistIds,
+        dateFrom,
+        dateTo,
+        country: country || undefined,
+        limitPerSource: 25,
+        maxPages: 8,
+        runPredictions: true,
+        persistConcerts: true,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries(['ingestionJobs'])
+      queryClient.invalidateQueries(['concerts'])
+    }
   })
 
-  const [scrapeSources, setScrapeSources] = useState(['websearch', 'discovery', 'setlistfm', 'concertarchives'])
+  const [scrapeSources, setScrapeSources] = useState(['BOOKMYSHOW', 'SONGKICK', 'BANDSINTOWN', 'EVENTBRITE'])
+  const [selectedArtistIds, setSelectedArtistIds] = useState([])
+  const [scrapeCountry, setScrapeCountry] = useState('')
   const [dateFrom, setDateFrom] = useState(() => new Date().toISOString().split('T')[0])
   const [dateTo, setDateTo] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() + 3)
+    const d = new Date(); d.setMonth(d.getMonth() + 18)
     return d.toISOString().split('T')[0]
   })
 
@@ -230,9 +262,20 @@ function AdminIngestion() {
       {/* Concert Scraper */}
       <div className="glass-card p-5 mb-6 animate-fade-up delay-1">
         <h3 className="font-display font-semibold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>Concert Scraper</h3>
-        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Discover and import concerts from web sources</p>
+        <p className="text-xs mb-4" style={{ color: 'var(--text-muted)' }}>Pick DB artists, scrape concerts, validate events, predict revenue and store concerts</p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-1 sm:grid-cols-6 gap-3 mb-4">
+          <div className="sm:col-span-2">
+            <label className="text-xs font-semibold uppercase tracking-widest block mb-1"
+              style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Artists</label>
+            <select multiple value={selectedArtistIds} onChange={e => setSelectedArtistIds(Array.from(e.target.selectedOptions, option => option.value))}
+              className="w-full rounded-xl px-3 py-2 text-sm outline-none min-h-[42px]"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
+              {artistOptions.map(artist => (
+                <option key={artist.id} value={artist.id}>{artist.artistName}</option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="text-xs font-semibold uppercase tracking-widest block mb-1"
               style={{ color: 'var(--text-muted)', fontSize: '10px' }}>From</label>
@@ -247,12 +290,22 @@ function AdminIngestion() {
               className="w-full rounded-xl px-3 py-2 text-sm outline-none"
               style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
           </div>
+          <div>
+            <label className="text-xs font-semibold uppercase tracking-widest block mb-1"
+              style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Country</label>
+            <input type="text" value={scrapeCountry} onChange={e => setScrapeCountry(e.target.value)}
+              placeholder="Any"
+              className="w-full rounded-xl px-3 py-2 text-sm outline-none"
+              style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+          </div>
           <div className="flex items-end gap-2">
             <button onClick={() => scrapeMutation.mutate({
               sources: scrapeSources,
-              dateFrom: new Date(dateFrom).toISOString(),
-              dateTo: new Date(dateTo).toISOString(),
-            })} disabled={scrapeMutation.isPending}
+              artistIds: selectedArtistIds,
+              dateFrom,
+              dateTo,
+              country: scrapeCountry.trim(),
+            })} disabled={scrapeMutation.isPending || scrapeSources.length === 0 || selectedArtistIds.length === 0}
               className="flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60"
               style={{ background: 'linear-gradient(135deg, #6366F1, #818CF8)', color: '#fff' }}>
               {scrapeMutation.isPending ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
@@ -262,27 +315,31 @@ function AdminIngestion() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {['websearch', 'discovery', 'setlistfm', 'concertarchives', 'bookmyshow', 'wikipedia'].map(src => (
-            <label key={src} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-xl cursor-pointer select-none transition-all duration-200"
+          {SCRAPE_SOURCES.map(src => (
+            <label key={src.key} className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-xl cursor-pointer select-none transition-all duration-200"
               style={{
-                background: scrapeSources.includes(src) ? 'rgba(99,102,241,0.12)' : 'var(--bg-secondary)',
-                border: `1px solid ${scrapeSources.includes(src) ? 'rgba(99,102,241,0.3)' : 'var(--border)'}`,
-                color: scrapeSources.includes(src) ? 'var(--accent-indigo)' : 'var(--text-muted)',
+                background: scrapeSources.includes(src.key) ? 'rgba(99,102,241,0.12)' : 'var(--bg-secondary)',
+                border: `1px solid ${scrapeSources.includes(src.key) ? 'rgba(99,102,241,0.3)' : 'var(--border)'}`,
+                color: scrapeSources.includes(src.key) ? 'var(--accent-indigo)' : 'var(--text-muted)',
               }}>
-              <input type="checkbox" checked={scrapeSources.includes(src)}
-                onChange={e => setScrapeSources(e.target.checked ? [...scrapeSources, src] : scrapeSources.filter(s => s !== src))}
+              <input type="checkbox" checked={scrapeSources.includes(src.key)}
+                onChange={e => setScrapeSources(e.target.checked ? [...scrapeSources, src.key] : scrapeSources.filter(s => s !== src.key))}
                 className="hidden" />
-              {src}
+              {src.label}
             </label>
           ))}
         </div>
 
-        {scrapeMutation.data?.data && (
+        {scrapeMutation.data?.data?.data && (
           <div className="mt-3 p-3 rounded-xl flex items-start gap-2"
             style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.15)' }}>
             <CheckCircle size={13} className="mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-indigo)' }} />
             <div className="text-xs" style={{ color: 'var(--accent-indigo)' }}>
-              Job started: <strong>{scrapeMutation.data.data.jobId || scrapeMutation.data.data.id}</strong>
+              Scraped <strong>{scrapeMutation.data.data.data.scrapedCount}</strong> concerts,
+              validated <strong>{scrapeMutation.data.data.data.validatedCount}</strong>,
+              predicted <strong>{scrapeMutation.data.data.data.predictedCount}</strong>,
+              stored <strong>{scrapeMutation.data.data.data.storedConcertCount}</strong>
+              {scrapeMutation.data.data.data.errors?.length > 0 && ` (${scrapeMutation.data.data.data.errors.length} source errors)`}
             </div>
           </div>
         )}

@@ -254,35 +254,41 @@ describe('Analytics Controller', () => {
     });
   });
 
-  describe('getComparison', () => {
-    it('should compare metrics across artists', async () => {
-      mockRequest.query = { artistIds: 'artist-1,artist-2', platform: 'SPOTIFY' };
+  describe('getGenres', () => {
+    it('should return genre popularity metrics', async () => {
+      mockRequest.query = {};
 
-      (prisma.platformMetric.findMany as jest.Mock).mockResolvedValue([]);
+      (redis.get as jest.Mock).mockResolvedValue(null);
+      (prisma.genre.findMany as jest.Mock).mockResolvedValue([]);
+      (redis.setex as jest.Mock).mockResolvedValue(true);
 
-      await analyticsController.getComparison(mockRequest as Request, mockResponse as Response);
+      await analyticsController.getGenres(mockRequest as Request, mockResponse as Response);
 
       expect(mockResponse.status).toHaveBeenCalledWith(200);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
+          data: { genres: [] },
         })
       );
     });
   });
 
-  describe('getDemographics', () => {
-    it('should return demographic data', async () => {
+  describe('getDemographicsAge', () => {
+    it('should return demographic age breakdown', async () => {
       mockRequest.query = { artistId: 'artist-1' };
 
-      (prisma.audienceDemographic.findMany as jest.Mock).mockResolvedValue([]);
+      (redis.get as jest.Mock).mockResolvedValue(null);
+      (prisma.audienceDemographic.groupBy as jest.Mock).mockResolvedValue([]);
+      (redis.setex as jest.Mock).mockResolvedValue(true);
 
-      await analyticsController.getDemographics(mockRequest as Request, mockResponse as Response);
+      await analyticsController.getDemographicsAge(mockRequest as Request, mockResponse as Response);
 
       expect(mockResponse.status).toHaveBeenCalledWith(200);
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
+          data: { breakdown: [] },
         })
       );
     });
