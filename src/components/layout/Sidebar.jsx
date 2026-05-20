@@ -1,9 +1,14 @@
+import { createElement } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
-  LayoutDashboard, Mic2, Music2, Users,
+  LayoutDashboard, Mic2, Music2,
   Map, Upload, UserCog, ChevronRight,
   BarChart3
 } from 'lucide-react'
+
+function NavIcon({ icon }) {
+  return createElement(icon, { size: 17 })
+}
 
 const navItems = [
   { label: 'Dashboard',    path: '/dashboard',      icon: LayoutDashboard },
@@ -50,7 +55,7 @@ function Sidebar() {
         <p className="text-xs font-semibold uppercase tracking-widest px-3 mb-3"
           style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Main</p>
 
-        {navItems.map(({ label, path, icon: Icon }, i) => (
+        {navItems.map(({ label, path, icon: Icon }) => (
           <NavLink
             key={path}
             to={path}
@@ -69,7 +74,7 @@ function Sidebar() {
               border: '1px solid transparent',
             }}
           >
-            <Icon size={17} />
+            <NavIcon icon={Icon} />
             <span className="flex-1">{label}</span>
             <ChevronRight size={13} className="opacity-0 group-hover:opacity-40 transition-opacity" />
           </NavLink>
@@ -93,7 +98,7 @@ function Sidebar() {
                 border: '1px solid transparent',
               }}
             >
-              <Icon size={17} />
+              <NavIcon icon={Icon} />
               <span className="flex-1">{label}</span>
               <ChevronRight size={13} className="opacity-0 group-hover:opacity-40 transition-opacity" />
             </NavLink>

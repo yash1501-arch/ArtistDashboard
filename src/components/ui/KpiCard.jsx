@@ -2,22 +2,33 @@ import { useEffect, useState } from 'react'
 import RoGBadge from './RoGBadge'
 
 function useCountUp(target, duration = 1000) {
-  const [value, setValue] = useState(0)
+  const getDisplayValue = () => {
+    const numeric = parseFloat(String(target).replace(/[^0-9.]/g, ''))
+    return isNaN(numeric) ? target : 0
+  }
+
+  const [value, setValue] = useState(getDisplayValue)
+
   useEffect(() => {
     const numeric = parseFloat(String(target).replace(/[^0-9.]/g, ''))
-    if (isNaN(numeric)) { setValue(target); return }
+    if (isNaN(numeric)) {
+      const animationFrame = requestAnimationFrame(() => setValue(target))
+      return () => cancelAnimationFrame(animationFrame)
+    }
     const start     = performance.now()
     const prefix    = String(target).match(/^[^0-9]*/)?.[0] || ''
     const suffix    = String(target).match(/[^0-9.]+$/)?.[0] || ''
+    let animationFrame
     const frame = (now) => {
       const progress = Math.min((now - start) / duration, 1)
       const ease     = 1 - Math.pow(1 - progress, 3)
       const current  = Math.round(numeric * ease * 10) / 10
       setValue(`${prefix}${Number.isInteger(numeric) ? Math.round(current) : current.toFixed(1)}${suffix}`)
-      if (progress < 1) requestAnimationFrame(frame)
+      if (progress < 1) animationFrame = requestAnimationFrame(frame)
     }
-    requestAnimationFrame(frame)
-  }, [target])
+    animationFrame = requestAnimationFrame(frame)
+    return () => cancelAnimationFrame(animationFrame)
+  }, [target, duration])
   return value
 }
 

@@ -32,17 +32,13 @@ function predictRevenue(artist, city, artistConcerts = []) {
 
   let avgTicketsSold = 15000
   let avgAtp = 2000
-  let avgSponsor = 500000
-
   if (artistConcerts.length > 0) {
     const totalTix = artistConcerts.reduce((s, c) => s + c.tickets_sold, 0)
     const totalRev = artistConcerts.reduce((s, c) => s + c.total_revenue, 0)
     const totalAtp = artistConcerts.reduce((s, c) => s + (c.avg_ticket_price || 0), 0)
-    const totalSponsor = artistConcerts.reduce((s, c) => s + (c.sponsors?.length ? c.total_revenue * 0.15 : c.total_revenue * 0.1), 0)
 
     avgTicketsSold = Math.floor(totalTix / artistConcerts.length) || 15000
     avgAtp = (totalAtp / artistConcerts.length) || (totalRev / totalTix) || 2000
-    avgSponsor = totalSponsor / artistConcerts.length
   }
 
   const adjustedCap = Math.floor(avgTicketsSold * 1.2 * city.multiplier)

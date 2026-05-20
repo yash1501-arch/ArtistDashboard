@@ -5,7 +5,7 @@ import { concertPipelineService } from '../services/concertPipeline.service';
 import { concertIntelligenceService } from '../services/concertIntelligence.service';
 import { revenuePredictionService } from '../services/predictions/revenuePrediction.service';
 import { ConcertSourcePlatform } from '../services/scrapers/types';
-import { calculateConcertMetrics, calculateConcertRevenue, withCalculatedConcertRevenue } from '../utils/concertRevenue';
+import { calculateConcertMetrics, withCalculatedConcertRevenue } from '../utils/concertRevenue';
 
 const SUPPORTED_INTELLIGENCE_SOURCES: ConcertSourcePlatform[] = [
   'BOOKMYSHOW',

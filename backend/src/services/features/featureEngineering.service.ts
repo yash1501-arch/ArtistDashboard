@@ -1,5 +1,6 @@
 import { DemographicDimension, Prisma } from '@prisma/client';
 import { prisma, redis } from '../../utils/database';
+import { calculateArtistPopularity } from '../../utils/artistPopularity';
 import { ConcertFeatureSet, FeatureEngineeringInput } from './types';
 
 const FEATURE_SET_VERSION = 'concert-intelligence-features-v1';
@@ -22,7 +23,7 @@ export class FeatureEngineeringService {
         this.calculateEngagementVelocity(artist?.id),
       ]);
 
-    const globalPopularity = artist ? this.calculateGlobalPopularity(artist) : 45;
+    const globalPopularity = artist ? await calculateArtistPopularity(artist) : 45;
     const localPopularity = this.clamp(globalPopularity * 0.52 + cityDemand * 0.32 + artistMomentum * 0.16, 0, 100);
     const venueCapacity = Math.max(100, Math.round(input.venueCapacity || await this.resolveVenueCapacity(input)));
     const avgTicketPrice = Math.max(1, input.avgTicketPrice || await this.resolveAverageTicketPrice(input));
@@ -231,26 +232,6 @@ export class FeatureEngineeringService {
 
     const growth = (latestEngagement - oldestEngagement) / oldestEngagement;
     return this.clamp(50 + growth * 45, 0, 100);
-  }
-
-  private calculateGlobalPopularity(artist: {
-    instagramFollowers: bigint | number | null;
-    facebookFollowers: bigint | number | null;
-    twitterFollowers: bigint | number | null;
-    spotifyMonthlyListeners: bigint | number | null;
-    youtubeSubscribers: bigint | number | null;
-    appleMusicListeners: bigint | number | null;
-  }): number {
-    const weightedReach =
-      this.toNumber(artist.spotifyMonthlyListeners) * 1.2 +
-      this.toNumber(artist.youtubeSubscribers) +
-      this.toNumber(artist.instagramFollowers) * 0.8 +
-      this.toNumber(artist.facebookFollowers) * 0.45 +
-      this.toNumber(artist.twitterFollowers) * 0.35 +
-      this.toNumber(artist.appleMusicListeners) * 0.8;
-
-    if (weightedReach <= 0) return 45;
-    return this.clamp(Math.log10(weightedReach + 1) * 11, 5, 100);
   }
 
   private async resolveVenueCapacity(input: FeatureEngineeringInput): Promise<number> {

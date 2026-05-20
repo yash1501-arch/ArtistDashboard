@@ -74,9 +74,6 @@ function Dashboard() {
         artistIdToType = {},
       } = data || {}
 
-  const safeTopArtists = topArtistsPool || []
-  const safeConcerts = allConcerts || []
-  const safeArtists = allArtists || []
   const safeTrends = followerTrends || []
 
   const marketLabel = artistType === 'indian'
@@ -94,9 +91,9 @@ function Dashboard() {
 
   // Filter top artists pool by type (for top list)
   const filteredArtists = useMemo(() => {
-    if (!safeTopArtists.length) return []
-    return artistType ? safeTopArtists.filter(a => a.type === artistType) : safeTopArtists
-  }, [safeTopArtists, artistType])
+    if (!topArtistsPool.length) return []
+    return artistType ? topArtistsPool.filter(a => a.type === artistType) : topArtistsPool
+  }, [topArtistsPool, artistType])
 
   // Apply time filter and get top 10
   const topArtistsByPopularity = useMemo(() => {

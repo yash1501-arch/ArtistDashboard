@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
-function RoGBadge({ value, size = 'sm' }) {
+function RoGBadge({ value }) {
   if (!value && value !== 0) return <span style={{ color: 'var(--text-muted)' }} className="text-xs">—</span>
 
   const isPositive = value > 0

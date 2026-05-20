@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import { spawn } from 'child_process';
 import path from 'path';
+import { calculateArtistPopularity } from '../src/utils/artistPopularity';
 
 const prisma = new PrismaClient();
 
@@ -28,14 +29,8 @@ async function testPredictions() {
       for (const concert of artist.concerts) {
         totalConcerts++;
 
-        // Prepare input for ML model
-        // Handle BigInt for instagramFollowers and other bigint fields
-        const instagramFollowersNum = artist.instagramFollowers
-          ? Number(artist.instagramFollowers)
-          : 0;
-
         const input = {
-          artist_popularity: Math.min(100, instagramFollowersNum ? instagramFollowersNum / 100000 : 50),
+          artist_popularity: await calculateArtistPopularity(artist),
           artist_city_popularity: concert.artistCityPopularity ? Number(concert.artistCityPopularity) : 50,
           venue_capacity: concert.capacity ? Number(concert.capacity) : 5000,
           city: concert.city,

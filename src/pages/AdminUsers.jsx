@@ -113,7 +113,7 @@ function AdminUsers() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((user, i) => (
+              {filtered.map((user) => (
                 <tr key={user.id} style={{ borderBottom: '1px solid var(--border)' }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>

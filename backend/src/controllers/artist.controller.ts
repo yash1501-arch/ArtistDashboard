@@ -133,7 +133,7 @@ export const artistController = {
         data: {
           artist: {
             ...artist,
-            concerts: artist.concerts.map(withCalculatedConcertRevenue),
+            concerts: (artist.concerts || []).map(withCalculatedConcertRevenue),
           },
         },
       });

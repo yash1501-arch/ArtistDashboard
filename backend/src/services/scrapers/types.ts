@@ -1,9 +1,11 @@
+
 export type ConcertSourcePlatform =
   | 'BOOKMYSHOW'
   | 'SONGKICK'
   | 'BANDSINTOWN'
   | 'EVENTBRITE'
-  | 'GOOGLE_CSE';
+  | 'GOOGLE_CSE'
+  | 'ZOMATO';
 
 export interface TicketPriceRange {
   min?: number;
@@ -57,3 +59,4 @@ export interface ScrapeJobPayload {
   query: ScrapeQuery;
   createdAt: string;
 }
+

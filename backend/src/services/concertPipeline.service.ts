@@ -3,6 +3,7 @@ import axios, { AxiosError, AxiosInstance } from 'axios';
 import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 import path from 'path';
+import { calculateArtistPopularity } from '../utils/artistPopularity';
 import { prisma } from '../utils/database';
 
 dotenv.config({
@@ -433,7 +434,7 @@ export class ConcertPipelineService {
   ): Promise<{ action: 'created' | 'updated'; concert: Concert }> {
     const venueInfo = await this.researchVenue(event.venueName, event.city, event.country);
     const cityPopularity = await this.calculateArtistCityPopularity(artist, event.city, event.country);
-    const globalPopularity = this.calculatePopularity(artist);
+    const globalPopularity = await calculateArtistPopularity(artist);
 
     const modelInput = {
       artist_id: artist.id,
@@ -713,7 +714,7 @@ export class ConcertPipelineService {
     city: string,
     country: string
   ): Promise<number> {
-    const globalPopularity = this.calculatePopularity(artist);
+    const globalPopularity = await calculateArtistPopularity(artist);
 
     const geography = await prisma.audienceDemographic.findFirst({
       where: {
@@ -750,27 +751,6 @@ export class ConcertPipelineService {
       this.clamp(globalPopularity * 0.68 + demographicBoost + cityHistoryBoost + countryHistoryBoost + marketBoost, 5, 100),
       2
     );
-  }
-
-  private calculatePopularity(artist: {
-    instagramFollowers: bigint | number | null;
-    facebookFollowers: bigint | number | null;
-    twitterFollowers: bigint | number | null;
-    spotifyMonthlyListeners: bigint | number | null;
-    youtubeSubscribers: bigint | number | null;
-    appleMusicListeners: bigint | number | null;
-  }): number {
-    const weightedReach =
-      this.toNumber(artist.spotifyMonthlyListeners) * 1.2 +
-      this.toNumber(artist.youtubeSubscribers) * 1.0 +
-      this.toNumber(artist.instagramFollowers) * 0.8 +
-      this.toNumber(artist.facebookFollowers) * 0.45 +
-      this.toNumber(artist.twitterFollowers) * 0.35 +
-      this.toNumber(artist.appleMusicListeners) * 0.8;
-
-    if (weightedReach <= 0) return 45;
-
-    return this.round(this.clamp(Math.log10(weightedReach + 1) * 11, 5, 100), 2);
   }
 
   private async callMLProcessor(input: Record<string, unknown>): Promise<PricingModelOutput> {

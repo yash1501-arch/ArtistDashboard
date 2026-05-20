@@ -23,7 +23,7 @@ function Topbar() {
   const { artistType, setArtistType }     = useFilterStore()
   const logout                           = useAuthStore((state) => state.logout)
 
-  useEffect(() => { initTheme() }, [])
+  useEffect(() => { initTheme() }, [initTheme])
 
   const title = Object.entries(pageTitles).find(([key]) =>
     pathname.startsWith(key)
