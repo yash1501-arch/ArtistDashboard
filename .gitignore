@@ -54,3 +54,5 @@ backend/coverage/
 backend/test-reports/
 
 backend/ml_engine/models/*.joblib
+
+mad_analytics/models/*.joblib

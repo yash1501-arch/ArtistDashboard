@@ -1,0 +1,25 @@
+# ML Engine Environment Variables
+# These are loaded from the backend .env file
+
+# Eventbrite API
+EVENTBRITE_API_KEY="WRJUBQ7LL2WJHEIHSX5C"
+
+# Spotify API
+SPOTIFY_CLIENT_ID="193a2a7745ce4b6b8af33cd21438d8da"
+SPOTIFY_CLIENT_SECRET="494e2ae9fb9c43d68d2b91a03acf0e88"
+
+# Bandsintown API (add your key)
+BANDSINTOWN_API_KEY=your-bandsintown-api-key
+
+# Paytm Insider API (add your key)
+PAYTM_INSIDER_API_KEY=your-paytm-insider-api-key
+
+# Songkick API (add your key)
+SONGKICK_API_KEY=your-songkick-api-key
+
+# Setlist.fm (add your key)
+SETLIST_API_KEY="h-cupJSIEgAMgf1Ngnkks6WjcpQ7eN3jR0FN"
+
+# Google Search API (add your key)
+GOOGLE_SEARCH_API_KEY="AIzaSyA5EMBi6kQEVMlMSWy-lCwrZJF_yfhzO4I"
+GOOGLE_SEARCH_CX="46952a21f9a5343d0"
