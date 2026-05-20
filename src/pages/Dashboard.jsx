@@ -134,7 +134,7 @@ function Dashboard() {
       title: 'Total Artists',
       value: totalArtistsCount,
       subtitle: `${marketLabel} artists`,
-      rog: 8.3,
+      //rog: 8.3,
       icon: Users,
       accentColor: '#818CF8',
       delay: 0,
@@ -143,7 +143,7 @@ function Dashboard() {
       title: 'Total Concerts',
       value: filteredConcerts.length,
       subtitle: 'All time',
-      rog: 12.5,
+      //rog: 12.5,
       icon: Music2,
       accentColor: '#FBBF24',
       delay: 80,
@@ -151,8 +151,8 @@ function Dashboard() {
     {
       title: 'Tickets Sold YTD',
       value: formatNumber(kpis?.ticketsSoldYTD || 0),
-      subtitle: 'Year to date',
-      rog: 0,
+      //subtitle: 'Year to date',
+      //rog: 0,
       icon: Ticket,
       accentColor: '#34D399',
       delay: 160,
@@ -160,21 +160,21 @@ function Dashboard() {
     {
       title: 'Revenue YTD',
       value: formatCurrency(kpis?.revenueYTD || 0),
-      subtitle: 'Year to date',
-      rog: 0,
+      //subtitle: 'Year to date',
+      //rog: 0,
       icon: DollarSign,
       accentColor: '#F87171',
       delay: 240,
     },
-    {
-      title: 'Avg Social RoG',
-      value: `${kpis?.avgRoG || 0}%`,
-      subtitle: 'All platforms',
-      rog: kpis?.avgRoG || 0,
-      icon: TrendingUp,
-      accentColor: '#A78BFA',
-      delay: 320,
-    },
+    // {
+    //   title: 'Avg Social RoG',
+    //   value: `${kpis?.avgRoG || 0}%`,
+    //   subtitle: 'All platforms',
+    //   rog: kpis?.avgRoG || 0,
+    //   icon: TrendingUp,
+    //   accentColor: '#A78BFA',
+    //   delay: 320,
+    // },
   ]
 
   return (
@@ -209,7 +209,7 @@ function Dashboard() {
       />
 
       {/* ── KPI Strip ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 mb-6">
         {KPI_CONFIG.map((kpi, i) => (
           <KpiCard key={i} {...kpi} />
         ))}
