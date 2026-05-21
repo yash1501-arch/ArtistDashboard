@@ -32,7 +32,8 @@ export function useArtists({ search = '', genre = '', limit = 100 } = {}) {
 
     const type = artist.nationality?.toLowerCase().includes('india') ? 'indian' : 'international'
 
-    const genre = artist.genres?.[0]?.genre?.name || 'Unknown'
+    // const genre = artist.genres?.[0]?.genre?.name || 'Unknown'
+    const genre = artist.genres?.[0]?.genre?.name
 
     const metricsByPlatform = (artist.platformMetrics || []).reduce((acc, m) => {
       const p = m.platform?.toLowerCase()
@@ -48,7 +49,7 @@ export function useArtists({ search = '', genre = '', limit = 100 } = {}) {
       youtube: Number(artist.youtubeSubscribers || metricsByPlatform.youtube?.followers || 0),
       spotify: Number(artist.spotifyMonthlyListeners || metricsByPlatform.spotify?.followers || 0),
       facebook: Number(artist.facebookFollowers || metricsByPlatform.facebook?.followers || 0),
-      applemusic: Number(artist.appleMusicListeners || metricsByPlatform.applemusic?.followers || 0),
+      // applemusic: Number(artist.appleMusicListeners || metricsByPlatform.applemusic?.followers || 0),
     }
 
     const rog = {
@@ -56,7 +57,7 @@ export function useArtists({ search = '', genre = '', limit = 100 } = {}) {
       youtube: Number(metricsByPlatform.youtube?.rogDaily || 0),
       spotify: Number(metricsByPlatform.spotify?.rogDaily || 0),
       facebook: Number(metricsByPlatform.facebook?.rogDaily || 0),
-      applemusic: Number(metricsByPlatform.applemusic?.rogDaily || 0),
+      // applemusic: Number(metricsByPlatform.applemusic?.rogDaily || 0),
     }
 
     return {

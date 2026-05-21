@@ -126,7 +126,7 @@ function Dashboard() {
     if (!filteredConcerts.length) return []
     const grouped = filteredConcerts.reduce((acc, c) => {
       if (!acc[c.city]) acc[c.city] = { name: c.city, revenue: 0 }
-      acc[c.city].revenue += c.total_revenue
+      acc[c.city].revenue += c.totalRevenue
       return acc
     }, {})
     return Object.values(grouped).sort((a, b) => b.revenue - a.revenue)
@@ -414,10 +414,10 @@ function Dashboard() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold font-display" style={{ color: 'var(--accent-gold)' }}>
-                      {formatCurrency(c.total_revenue)}
+                      {formatCurrency(c.totalRevenue)}
                     </p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      {formatNumber(c.tickets_sold)} tickets
+                      {formatNumber(c.ticketsSold)} tickets
                     </p>
                   </div>
                 </div>

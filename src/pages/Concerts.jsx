@@ -36,7 +36,7 @@ function getTime(value) {
 }
 
 function getSellThrough(concert) {
-  const tickets = Number(concert.tickets_sold || 0)
+  const tickets = Number(concert.ticketsSold || 0)
   const capacity = Number(concert.capacity || 0)
   return capacity > 0 ? (tickets / capacity) * 100 : 0
 }
@@ -145,13 +145,13 @@ function ConcertCard({ concert, onOpen }) {
         <div className="rounded-xl p-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
           <p className="text-xs" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Tickets</p>
           <p className="text-sm font-bold mt-1" style={{ color: 'var(--text-primary)' }}>
-            {formatNumber(concert.tickets_sold || 0)}
+            {formatNumber(concert.ticketsSold || 0)}
           </p>
         </div>
         <div className="rounded-xl p-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
           <p className="text-xs" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Revenue</p>
           <p className="text-sm font-bold mt-1" style={{ color: 'var(--text-primary)' }}>
-            {formatCurrency(concert.total_revenue || 0)}
+            {formatCurrency(concert.totalRevenue || 0)}
           </p>
         </div>
       </div>
@@ -244,21 +244,21 @@ function Concerts() {
       })
       .sort((a, b) => {
         if (sortBy === 'date-asc') return getTime(a.date) - getTime(b.date)
-        if (sortBy === 'revenue-desc') return Number(b.total_revenue || 0) - Number(a.total_revenue || 0)
-        if (sortBy === 'tickets-desc') return Number(b.tickets_sold || 0) - Number(a.tickets_sold || 0)
+        if (sortBy === 'revenue-desc') return Number(b.totalRevenue || 0) - Number(a.totalRevenue || 0)
+        if (sortBy === 'tickets-desc') return Number(b.ticketsSold || 0) - Number(a.ticketsSold || 0)
         if (sortBy === 'sell-through-desc') return getSellThrough(b) - getSellThrough(a)
         return getTime(b.date) - getTime(a.date)
       })
   }, [activeCity, concerts, queryYear, search, sortBy])
 
   const metrics = useMemo(() => {
-    const totalTickets = filtered.reduce((sum, concert) => sum + Number(concert.tickets_sold || 0), 0)
+    const totalTickets = filtered.reduce((sum, concert) => sum + Number(concert.ticketsSold || 0), 0)
     const totalCapacity = filtered.reduce((sum, concert) => sum + Number(concert.capacity || 0), 0)
-    const totalRevenue = filtered.reduce((sum, concert) => sum + Number(concert.total_revenue || 0), 0)
+    const totalRevenue = filtered.reduce((sum, concert) => sum + Number(concert.totalRevenue || 0), 0)
     const topCity = Object.values(filtered.reduce((acc, concert) => {
       const city = concert.city || 'Unknown'
       if (!acc[city]) acc[city] = { city, revenue: 0, count: 0 }
-      acc[city].revenue += Number(concert.total_revenue || 0)
+      acc[city].revenue += Number(concert.totalRevenue || 0)
       acc[city].count += 1
       return acc
     }, {})).sort((a, b) => b.revenue - a.revenue)[0]
@@ -329,22 +329,22 @@ function Concerts() {
           color="#818CF8"
           delay={0}
         />
-        <MetricCard
-          icon={Ticket}
-          label="Tickets Sold"
-          value={formatNumber(metrics.totalTickets)}
-          helper={`${metrics.avgSellThrough.toFixed(1)}% average sell-through`}
-          color="#F59E0B"
-          delay={70}
-        />
-        <MetricCard
-          icon={DollarSign}
-          label="Revenue"
-          value={formatCurrency(metrics.totalRevenue)}
-          helper={`${formatCurrency(metrics.avgTicketPrice)} average ticket`}
-          color="#10B981"
-          delay={140}
-        />
+            <MetricCard
+              icon={Ticket}
+              label="Tickets Sold"
+              value={formatNumber(metrics.totalTickets)}
+              helper={`${metrics.avgSellThrough.toFixed(1)}% average sell-through`}
+              color="#F59E0B"
+              delay={70}
+            />
+            <MetricCard
+              icon={DollarSign}
+              label="Revenue"
+              value={formatCurrency(metrics.totalRevenue)}
+              helper={`${formatCurrency(metrics.avgTicketPrice)} average ticket`}
+              color="#10B981"
+              delay={140}
+            />
         <MetricCard
           icon={TrendingUp}
           label="Sell-Through"
@@ -515,7 +515,7 @@ function Concerts() {
                 </thead>
                 <tbody>
                   {filtered.map(concert => {
-                    const tickets = Number(concert.tickets_sold || 0)
+                    const tickets = Number(concert.ticketsSold || 0)
                     const capacity = Number(concert.capacity || 0)
                     const sellThrough = getSellThrough(concert)
 
@@ -570,10 +570,10 @@ function Concerts() {
                           <SellThroughBar value={sellThrough} capacity={capacity} />
                         </td>
                         <td className="px-4 py-4 text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                          {formatCurrency(concert.avg_ticket_price || 0)}
+                          {formatCurrency(concert.avgTicketPrice || 0)}
                         </td>
                         <td className="px-4 py-4 text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                          {formatCurrency(concert.total_revenue || 0)}
+                          {formatCurrency(concert.totalRevenue || 0)}
                         </td>
                         <td className="px-4 py-4">
                           <ChevronRight size={17} style={{ color: 'var(--text-muted)' }} />

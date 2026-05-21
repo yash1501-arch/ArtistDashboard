@@ -177,19 +177,21 @@ function ArtistCard({ artist, onClick, delay = 0 }) {
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="font-display font-bold text-sm truncate" style={{ color: 'var(--text-primary)' }}>
-            {artist.name || 'Unknown Artist'}
+            {/* {artist.name || 'Unknown Artist'} */}
+            {artist.name}
           </h3>
-          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {/* <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <span className="text-xs px-2 py-0.5 rounded-full font-medium"
               style={{ background: 'rgba(99,102,241,0.12)', color: 'var(--accent-indigo)' }}>
               {artist.genre || 'Various'}
             </span>
-          </div>
+          </div> */}
           <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-            {artist.nationality || 'Unknown'}
+            {/* {artist.nationality || 'Unknown'} */}
+            {artist.nationality}
           </p>
         </div>
-        <RoGBadge value={avgRoG} />
+        {/* <RoGBadge value={avgRoG} /> */}
       </div>
 
       {/* Age + Concerts row */}
@@ -214,7 +216,7 @@ function ArtistCard({ artist, onClick, delay = 0 }) {
       {/* Total Followers */}
       <div className="mb-3">
         <p className="text-xs uppercase tracking-widest mb-1"
-          style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Total Followers</p>
+          style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Total Listeners (spotify)</p>
         <p className="font-display font-bold text-2xl" style={{ color: 'var(--text-primary)' }}>
           {formatNumber(totalFollowers)}
         </p>
