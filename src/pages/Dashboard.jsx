@@ -118,6 +118,9 @@ function Dashboard() {
       : allConcerts
   }, [allConcerts, artistIdToType, artistType])
 
+  // Show only the latest 15 concerts in the dashboard list
+  const recentConcerts = useMemo(() => filteredConcerts.slice(0, 10), [filteredConcerts])
+
   // Aggregate revenue by city from filteredConcerts
   const revenueByCity = useMemo(() => {
     if (!filteredConcerts.length) return []
@@ -221,7 +224,7 @@ function Dashboard() {
         {/* Multi-line trend */}
         <ChartContainer
           title="Platform Growth Trends"
-          subtitle="Instagram · YouTube · Spotify — monthly followers"
+          subtitle="Instagram · YouTube · Spotify - monthly followers / subscribers / streams over time"
           delay={100}
         >
           <div className="flex gap-2 mb-4 flex-wrap">
@@ -372,16 +375,17 @@ function Dashboard() {
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="font-display font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>
-                Recent Concerts
+                Concerts
               </h3>
               <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                Latest {marketLabel} events at a glance
+                {marketLabel} Artist events at a glance
               </p>
             </div>
-            <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
+            {/* <span className="text-xs px-2.5 py-1 rounded-full font-semibold"
               style={{ background: 'rgba(99,102,241,0.12)', color: 'var(--accent-indigo)' }}>
               {filteredConcerts.length} events
-            </span>
+              Upcoming events
+            </span> */}
           </div>
 
           <div className="space-y-2">
@@ -390,7 +394,7 @@ function Dashboard() {
                 No concerts found for selected market
               </p>
             ) : (
-              filteredConcerts.map((c, i) => (
+              recentConcerts.map((c, i) => (
                 <div key={c.id}
                   className="flex items-center gap-3 p-3 rounded-xl transition-all duration-200 cursor-pointer"
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-secondary)'}
