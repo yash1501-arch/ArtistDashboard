@@ -9,6 +9,7 @@ Python ML calculation layer for the MAD (Music Artist Dashboard) platform.
 | `growth.rog_calculator` | Artist platform metrics (60–90d) | Per-platform RoG, 30/90/180d forecasts, cross-platform score |
 | `demand.scorer` | Platform metrics + past concerts + target city/date | Composite 0–100 demand score |
 | `revenue.predictor` | Concert details + platform metrics (+ optional demand score) | Predicted revenue with confidence interval + SHAP importances |
+| `popularity.calculator` | Platform history across social/video channels or backend artist snapshot | Entropy-weighted artist popularity score + platform weights |
 
 ## Setup
 
@@ -23,6 +24,28 @@ uvicorn mad_analytics.server:app --port 8001 --reload
 ```
 
 API docs available at `http://localhost:8001/docs`
+
+If you call `POST /popularity` with just `artist_id` and no `platform_metrics`, the service will fetch current snapshot data from the backend `artists` table using the `DATABASE_URL` environment variable.
+
+You can also compute popularity for all active artists with:
+
+```http
+GET /popularity/all
+```
+
+This returns a list of popularity scores generated from the backend artist snapshots.
+
+To persist the latest batch into the analytics database and make it available for later reads, call:
+
+```http
+POST /popularity/all/save
+```
+
+You can then retrieve the saved scores with:
+
+```http
+GET /popularity/saved
+```
 
 ## Express integration
 

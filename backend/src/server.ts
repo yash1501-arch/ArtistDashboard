@@ -12,6 +12,7 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
 import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth.routes';
 import artistRoutes from './routes/artist.routes';
@@ -44,6 +45,9 @@ app.use(cors({
 
 // Compression
 app.use(compression());
+
+// Cookie parsing for refresh token support
+app.use(cookieParser());
 
 // Logging
 if (process.env.NODE_ENV !== 'test') {

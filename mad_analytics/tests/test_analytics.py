@@ -5,16 +5,21 @@ Pytest suite for all three calculation modules.
 Run: pytest mad_analytics/tests/ -v
 """
 from __future__ import annotations
-import pytest
+import tempfile
 from datetime import date, timedelta
+
+import pytest
 
 from mad_analytics.utils.schemas import (
     PlatformMetricRow, ConcertRow,
-    GrowthInput, DemandInput, RevenueInput,
+    GrowthInput, DemandInput, RevenueInput, PopularityInput, PopularityOutput,
 )
 from mad_analytics.growth.rog_calculator import calculate as growth_calc
 from mad_analytics.demand.scorer import calculate as demand_calc
 from mad_analytics.revenue.predictor import calculate as revenue_calc
+from mad_analytics.popularity import calculate as popularity_calc, calculate_all as popularity_calc_all
+import mad_analytics.popularity.calculator as popularity_calculator
+from mad_analytics.utils.db import persist_popularity_scores, fetch_saved_popularity
 from mad_analytics.utils.feature_engineering import (
     rog, exponential_smooth, seasonality_factor,
     social_velocity, ticket_velocity, infer_artist_tier, metrics_to_df,
@@ -263,3 +268,126 @@ class TestRevenuePredictor:
         payload = RevenueInput(concert=concert, platform_metrics=metrics, demand_score=75.0)
         out = revenue_calc(payload)
         assert out.demand_score_used == 75.0
+
+
+class TestArtistPopularity:
+    def _payload(self):
+        metrics = make_metrics(90, "spotify") + make_metrics(90, "instagram")
+        return PopularityInput(artist_id="artist_001", platform_metrics=metrics)
+
+    def test_popularity_schema(self):
+        out = popularity_calc(self._payload())
+        assert out.artist_id == "artist_001"
+        assert 0 <= out.popularity_score <= 100
+        assert abs(sum(out.platform_weights.values()) - 1.0) < 0.01
+        assert set(out.platform_weights) == set(out.platform_contributions)
+
+    def test_more_platforms_increase_score(self):
+        base_payload = PopularityInput(
+            artist_id="artist_001",
+            platform_metrics=make_metrics(90, "spotify"),
+        )
+        multi_payload = PopularityInput(
+            artist_id="artist_001",
+            platform_metrics=make_metrics(90, "spotify") + make_metrics(90, "instagram"),
+        )
+        base = popularity_calc(base_payload)
+        multi = popularity_calc(multi_payload)
+        assert multi.popularity_score >= base.popularity_score
+
+    def test_snapshot_artist_popularity_with_db_fetch(self, monkeypatch):
+        snapshot_rows = [
+            {
+                "artist_id": "artist_001",
+                "artistName": "Test Artist",
+                "spotifyMonthlyListeners": 100000,
+                "youtubeSubscribers": 50000,
+                "instagramFollowers": 80000,
+                "facebookFollowers": 20000,
+                "twitterFollowers": 15000,
+                "appleMusicListeners": 25000,
+            },
+            {
+                "artist_id": "artist_002",
+                "artistName": "Peer Artist",
+                "spotifyMonthlyListeners": 50000,
+                "youtubeSubscribers": 30000,
+                "instagramFollowers": 40000,
+                "facebookFollowers": 10000,
+                "twitterFollowers": 5000,
+                "appleMusicListeners": 12000,
+            },
+        ]
+        monkeypatch.setattr(popularity_calculator, "fetch_artist_snapshots", lambda: snapshot_rows)
+
+        payload = PopularityInput(artist_id="artist_001")
+        out = popularity_calc(payload)
+
+        assert out.artist_id == "artist_001"
+        assert 0 <= out.popularity_score <= 100
+        assert "spotify" in out.platform_weights
+        assert "spotify" in out.platform_contributions
+
+    def test_snapshot_popularity_for_all_artists(self, monkeypatch):
+        snapshot_rows = [
+            {
+                "artist_id": "artist_001",
+                "artistName": "Test Artist",
+                "spotifyMonthlyListeners": 100000,
+                "youtubeSubscribers": 50000,
+                "instagramFollowers": 80000,
+                "facebookFollowers": 20000,
+                "twitterFollowers": 15000,
+                "appleMusicListeners": 25000,
+            },
+            {
+                "artist_id": "artist_002",
+                "artistName": "Peer Artist",
+                "spotifyMonthlyListeners": 50000,
+                "youtubeSubscribers": 30000,
+                "instagramFollowers": 40000,
+                "facebookFollowers": 10000,
+                "twitterFollowers": 5000,
+                "appleMusicListeners": 12000,
+            },
+        ]
+        monkeypatch.setattr(popularity_calculator, "fetch_artist_snapshots", lambda: snapshot_rows)
+
+        outputs = popularity_calc_all()
+
+        assert len(outputs) == 2
+        assert outputs[0].artist_id == "artist_001"
+        assert outputs[1].artist_id == "artist_002"
+        assert all(0 <= out.popularity_score <= 100 for out in outputs)
+
+
+class TestPopularityPersistence:
+    def test_persist_and_fetch_scores(self):
+        outputs = [
+            PopularityOutput(
+                artist_id="artist_001",
+                popularity_score=75.5,
+                platform_weights={"spotify": 0.5, "youtube": 0.5},
+                platform_contributions={"spotify": 0.4, "youtube": 0.5},
+                computed_at="2026-05-21T00:00:00+00:00",
+            ),
+            PopularityOutput(
+                artist_id="artist_002",
+                popularity_score=50.0,
+                platform_weights={"spotify": 0.7, "youtube": 0.3},
+                platform_contributions={"spotify": 0.35, "youtube": 0.15},
+                computed_at="2026-05-21T00:00:00+00:00",
+            ),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = f"{tmpdir}/popularity_test.db"
+            db_url = f"sqlite+pysqlite:///{db_path}"
+            saved = persist_popularity_scores(outputs, db_url=db_url)
+            assert saved == 2
+
+            saved_rows = fetch_saved_popularity(db_url=db_url)
+            assert len(saved_rows) == 2
+            assert saved_rows[0]["artist_id"] == "artist_001"
+            assert saved_rows[1]["artist_id"] == "artist_002"
+            assert saved_rows[0]["platform_weights"]["spotify"] == 0.5

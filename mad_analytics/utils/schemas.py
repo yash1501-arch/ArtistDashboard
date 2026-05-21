@@ -110,3 +110,21 @@ class RevenueOutput(BaseModel):
     demand_score_used: float
     feature_importances: dict[str, float]
     computed_at: str
+
+
+class PopularityInput(BaseModel):
+    artist_id: str
+    platform_metrics: list[PlatformMetricRow] = Field(default_factory=list)
+
+    @field_validator("platform_metrics")
+    @classmethod
+    def allow_empty_or_snapshot(cls, v: list[PlatformMetricRow]) -> list[PlatformMetricRow]:
+        return v
+
+
+class PopularityOutput(BaseModel):
+    artist_id: str
+    popularity_score: float = Field(..., ge=0, le=100)
+    platform_weights: dict[str, float]
+    platform_contributions: dict[str, float]
+    computed_at: str
