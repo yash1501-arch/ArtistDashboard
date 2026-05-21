@@ -204,9 +204,9 @@ function ProfitabilityPredictor({ artists, concerts }) {
 
           {/* KPI Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <StatBox label="Predicted Revenue" value={formatCurrency(pred.totalRevenue)} color="var(--accent-gold)" delay={0} />
+            <StatBox label="Predicted Revenue" value={formatCurrency(pred.totalRevenue, { city: city?.name || city })} color="var(--accent-gold)" delay={0} />
             <StatBox label="Est. Tickets Sold" value={formatNumber(pred.ticketsSold)} color="var(--accent-indigo)" delay={80} />
-            <StatBox label="Avg. Ticket Price" value={formatCurrency(pred.atp)} color="var(--accent-green)" delay={160} />
+            <StatBox label="Avg. Ticket Price" value={formatCurrency(pred.atp, { city: city?.name || city })} color="var(--accent-green)" delay={160} />
             <StatBox label="Projected ROI" value={`${pred.roi.toFixed(1)}%`} color={pred.roi > 50 ? 'var(--accent-green)' : 'var(--accent-gold)'} delay={240} />
           </div>
 

@@ -35,8 +35,8 @@ function ConcertDetail() {
 
   const kpis = [
     { label: 'Tickets Sold',    value: formatNumber(concert.ticketsSold), sub: `of ${formatNumber(concert.capacity)}`, icon: Ticket,      color: 'var(--accent-indigo)' },
-    { label: 'Avg Ticket Price',value: formatCurrency(concert.avgTicketPrice), sub: 'per ticket',            icon: TrendingUp,  color: 'var(--accent-gold)'   },
-    { label: 'Total Revenue',   value: formatCurrency(concert.totalRevenue),    sub: 'incl. sponsors',        icon: DollarSign,  color: 'var(--accent-green)'  },
+    { label: 'Avg Ticket Price',value: formatCurrency(concert.avgTicketPrice, { country: concert.country }), sub: 'per ticket',            icon: TrendingUp,  color: 'var(--accent-gold)'   },
+    { label: 'Total Revenue',   value: formatCurrency(concert.totalRevenue, { country: concert.country }),    sub: 'incl. sponsors',        icon: DollarSign,  color: 'var(--accent-green)'  },
     { label: 'Sponsors',        value: concert.sponsors.length,                  sub: 'brand partners',        icon: Star,        color: 'var(--accent-red)'    },
   ]
 

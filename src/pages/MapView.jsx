@@ -158,8 +158,8 @@ function MapView() {
                       { label: 'Date',         value: formatDate(selectedConcert.date) },
                       { label: 'Capacity',     value: formatNumber(selectedConcert.capacity) },
                       { label: 'Tickets Sold', value: formatNumber(selectedConcert.ticketsSold) },
-                      { label: 'ATP',          value: formatCurrency(selectedConcert.avgTicketPrice) },
-                      { label: 'Revenue',      value: formatCurrency(selectedConcert.totalRevenue) },
+                      { label: 'ATP',          value: formatCurrency(selectedConcert.avgTicketPrice, { country: selectedConcert.country }) },
+                      { label: 'Revenue',      value: formatCurrency(selectedConcert.totalRevenue, { country: selectedConcert.country }) },
                       { label: 'Sell-Through', value: (selectedConcert.capacity > 0 ? ((selectedConcert.ticketsSold / selectedConcert.capacity) * 100).toFixed(1) : '0.0') + '%' },
                 ].map((item, i) => (
                   <div key={i} className="rounded-xl p-2" style={{ background: 'var(--bg-secondary)' }}>
@@ -203,7 +203,7 @@ function MapView() {
                   <div className="flex items-center justify-between">
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(concert.date)}</span>
                     <span className="text-xs font-bold font-display" style={{ color: 'var(--accent-gold)' }}>
-                      {formatCurrency(concert.totalRevenue)}
+                      {formatCurrency(concert.totalRevenue, { country: concert.country })}
                     </span>
                   </div>
                 </div>

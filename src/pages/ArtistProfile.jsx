@@ -199,6 +199,8 @@ function ArtistProfile() {
     venue: c.venueName,
     ticketsSold: c.ticketsSold,
     totalRevenue: c.totalRevenue,
+    country: c.country,
+    avgTicketPrice: c.avgTicketPrice,
   }))
 
   // Transform trends: aggregate metrics by date and platform
@@ -289,7 +291,7 @@ function ArtistProfile() {
             {/* KPI Strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
-                { label: 'Total Listeners (Spotify)', value: formatNumber(totalFollowers), icon: Users, color: 'var(--accent-indigo)' },
+                { label: 'Monthly Listeners (Spotify)', value: formatNumber(totalFollowers), icon: Users, color: 'var(--accent-indigo)' },
                 { label: 'Top Platform', value: Object.entries(followers).sort((a, b) => b[1] - a[1])[0][0] || 'N/A', icon: TrendingUp, color: 'var(--accent-gold)' },
                 { label: 'Total Revenue', value: formatCurrency(totalRevenue), icon: DollarSign, color: 'var(--accent-green)' },
                 { label: 'Tickets Sold', value: formatNumber(totalTickets), icon: Ticket, color: 'var(--accent-red)' },
@@ -409,7 +411,7 @@ function ArtistProfile() {
                     <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-secondary)' }}>{c.city}</td>
                     <td className="px-4 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>{c.venue}</td>
                     <td className="px-4 py-3 text-xs font-semibold" style={{ color: 'var(--text-secondary)' }}>{formatNumber(c.ticketsSold)}</td>
-                    <td className="px-4 py-3 font-bold font-display text-sm" style={{ color: 'var(--accent-gold)' }}>{formatCurrency(c.totalRevenue)}</td>
+                    <td className="px-4 py-3 font-bold font-display text-sm" style={{ color: 'var(--accent-gold)' }}>{formatCurrency(c.totalRevenue, { country: c.country })}</td>
                   </tr>
                 ))}
               </tbody>

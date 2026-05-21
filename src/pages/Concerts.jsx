@@ -148,10 +148,10 @@ function ConcertCard({ concert, onOpen }) {
             {formatNumber(concert.ticketsSold || 0)}
           </p>
         </div>
-        <div className="rounded-xl p-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+          <div className="rounded-xl p-3" style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
           <p className="text-xs" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Revenue</p>
           <p className="text-sm font-bold mt-1" style={{ color: 'var(--text-primary)' }}>
-            {formatCurrency(concert.totalRevenue || 0)}
+            {formatCurrency(concert.totalRevenue || 0, { country: concert.country })}
           </p>
         </div>
       </div>
@@ -263,10 +263,16 @@ function Concerts() {
       return acc
     }, {})).sort((a, b) => b.revenue - a.revenue)[0]
 
+    // If all filtered concerts are from the same non-Indian country, surface that country for metric formatting
+    const currencyCountry = filtered.length > 0 && filtered.every(c => c.country && c.country === filtered[0].country)
+      ? filtered[0].country
+      : undefined
+
     return {
       totalTickets,
       totalRevenue,
       avgTicketPrice: totalTickets > 0 ? totalRevenue / totalTickets : 0,
+      currencyCountry,
       avgSellThrough: totalCapacity > 0 ? (totalTickets / totalCapacity) * 100 : 0,
       topCity,
     }
@@ -340,8 +346,8 @@ function Concerts() {
             <MetricCard
               icon={DollarSign}
               label="Revenue"
-              value={formatCurrency(metrics.totalRevenue)}
-              helper={`${formatCurrency(metrics.avgTicketPrice)} average ticket`}
+              value={formatCurrency(metrics.totalRevenue, { country: metrics.currencyCountry })}
+              helper={`${formatCurrency(metrics.avgTicketPrice, { country: metrics.currencyCountry })} average ticket`}
               color="#10B981"
               delay={140}
             />
@@ -570,10 +576,10 @@ function Concerts() {
                           <SellThroughBar value={sellThrough} capacity={capacity} />
                         </td>
                         <td className="px-4 py-4 text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>
-                          {formatCurrency(concert.avgTicketPrice || 0)}
+                          {formatCurrency(concert.avgTicketPrice || 0, { country: concert.country })}
                         </td>
                         <td className="px-4 py-4 text-sm font-bold" style={{ color: 'var(--text-primary)' }}>
-                          {formatCurrency(concert.totalRevenue || 0)}
+                          {formatCurrency(concert.totalRevenue || 0, { country: concert.country })}
                         </td>
                         <td className="px-4 py-4">
                           <ChevronRight size={17} style={{ color: 'var(--text-muted)' }} />

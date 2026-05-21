@@ -414,7 +414,7 @@ function Dashboard() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-sm font-bold font-display" style={{ color: 'var(--accent-gold)' }}>
-                      {formatCurrency(c.totalRevenue)}
+                      {formatCurrency(c.totalRevenue, { country: c.country })}
                     </p>
                     <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                       {formatNumber(c.ticketsSold)} tickets
