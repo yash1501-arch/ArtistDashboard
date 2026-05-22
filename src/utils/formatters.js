@@ -7,13 +7,41 @@ export function formatNumber(num) {
   return num.toLocaleString('en-IN')
 }
 
-// Format currency → 175000 → "₹1.75L"
-export function formatCurrency(num) {
+// Format currency → supports multiple currencies with proper symbols and locale
+export function formatCurrency(num, currency = 'INR') {
   if (!num && num !== 0) return '—'
-  if (num >= 10_000_000) return '₹' + (num / 10_000_000).toFixed(2) + 'Cr'
-  if (num >= 100_000)    return '₹' + (num / 100_000).toFixed(2) + 'L'
-  if (num >= 1_000)      return '₹' + (num / 1_000).toFixed(1) + 'K'
-  return '₹' + num.toLocaleString('en-IN')
+  
+  const code = (currency || 'INR').toUpperCase()
+  
+  // Currency symbols and formatting config
+  const currencyConfig = {
+    INR: { symbol: '₹', locale: 'en-IN', compact: { cr: 10_000_000, l: 100_000, k: 1_000 } },
+    USD: { symbol: '$', locale: 'en-US', compact: { m: 1_000_000, k: 1_000 } },
+    EUR: { symbol: '€', locale: 'en-DE', compact: { m: 1_000_000, k: 1_000 } },
+    GBP: { symbol: '£', locale: 'en-GB', compact: { m: 1_000_000, k: 1_000 } },
+    AUD: { symbol: 'A$', locale: 'en-AU', compact: { m: 1_000_000, k: 1_000 } },
+    CAD: { symbol: 'C$', locale: 'en-CA', compact: { m: 1_000_000, k: 1_000 } },
+    AED: { symbol: 'د.إ', locale: 'ar-AE', compact: { m: 1_000_000, k: 1_000 } },
+    SGD: { symbol: 'S$', locale: 'en-SG', compact: { m: 1_000_000, k: 1_000 } },
+    NZD: { symbol: 'NZ$', locale: 'en-NZ', compact: { m: 1_000_000, k: 1_000 } },
+    JPY: { symbol: '¥', locale: 'ja-JP', compact: { m: 1_000_000, k: 1_000 } },
+  }
+  
+  const config = currencyConfig[code] || { symbol: code + ' ', locale: 'en-US', compact: { m: 1_000_000, k: 1_000 } }
+  
+  // Indian notation (Cr, L, K)
+  if (code === 'INR') {
+    if (num >= 10_000_000) return config.symbol + (num / 10_000_000).toFixed(2) + 'Cr'
+    if (num >= 100_000)    return config.symbol + (num / 100_000).toFixed(2) + 'L'
+    if (num >= 1_000)      return config.symbol + (num / 1_000).toFixed(1) + 'K'
+    return config.symbol + num.toLocaleString('en-IN')
+  }
+  
+  // Western notation (M, K)
+  if (num >= 1_000_000_000) return config.symbol + (num / 1_000_000_000).toFixed(2) + 'B'
+  if (num >= 1_000_000)     return config.symbol + (num / 1_000_000).toFixed(2) + 'M'
+  if (num >= 1_000)         return config.symbol + (num / 1_000).toFixed(1) + 'K'
+  return config.symbol + num.toLocaleString(config.locale)
 }
 
 // Format RoG → 12.4 → "+12.4%"

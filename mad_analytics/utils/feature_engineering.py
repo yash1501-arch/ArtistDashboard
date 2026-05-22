@@ -2,7 +2,6 @@
 from __future__ import annotations
 import math
 from datetime import date, timedelta
-from collections import defaultdict
 from typing import Optional
 
 import numpy as np
@@ -31,6 +30,14 @@ def metrics_to_df(metrics: list[PlatformMetricRow]) -> pd.DataFrame:
     rows = [r.model_dump() for r in metrics]
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"])
+    df["platform"] = (
+        df["platform"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .str.replace("-", "_", regex=False)
+        .str.replace(" ", "_", regex=False)
+    )
     df = df.sort_values("date").reset_index(drop=True)
     return df
 
@@ -140,8 +147,11 @@ WEEKEND_DAYS = {4, 5, 6}   # Fri, Sat, Sun (weekday() indices)
 
 def concert_base_features(concert: ConcertRow) -> dict:
     """Numeric / categorical features derived from a single concert record."""
-    avg_price = (concert.ticket_price_min + concert.ticket_price_max) / 2
+    # LLM Processor tier distribution: VIP (10%), Tier1 (20%), Tier2 (40%), Tier3 (30%)
+    # This evaluates to a weighted average of min + 23.5% of the price range
     price_range = concert.ticket_price_max - concert.ticket_price_min
+    avg_price = concert.ticket_price_min + (price_range * 0.235)
+    
     return {
         "venue_capacity":    concert.venue_capacity,
         "avg_ticket_price":  avg_price,
@@ -172,6 +182,46 @@ def social_velocity(df: pd.DataFrame, days: int = 14) -> float:
     return min(1.0, math.log1p(total_growth) / math.log1p(1_000_000))
 
 
+def sell_through_rate(
+    tickets_sold: Optional[int],
+    venue_capacity: Optional[int],
+    *,
+    cap_at_one: bool = True,
+) -> float:
+    """
+    Return tickets sold divided by venue capacity as a 0-1 rate.
+
+    Missing values, zero capacity, and negative tickets are tre ated as 0.0.
+    Oversold events are capped at 1.0 by default so downstream demand scores
+    stay in their expected range.
+    """
+    if tickets_sold is None or venue_capacity is None or venue_capacity <= 0:
+        return 0.0
+
+    sold = max(0.0, float(tickets_sold))
+    rate = sold / float(venue_capacity)
+    if cap_at_one:
+        rate = min(rate, 1.0)
+    return round(rate, 4)
+
+
+def sell_through_percentage(
+    tickets_sold: Optional[int],
+    venue_capacity: Optional[int],
+    *,
+    cap_at_100: bool = True,
+) -> float:
+    """Return sell-through as a percentage on a 0-100 scale."""
+    return round(
+        sell_through_rate(
+            tickets_sold,
+            venue_capacity,
+            cap_at_one=cap_at_100,
+        ) * 100,
+        2,
+    )
+
+
 def ticket_velocity(concerts: list[ConcertRow], days_back: int = 90) -> float:
     """
     Ratio of tickets sold vs capacity across recent concerts.
@@ -180,20 +230,103 @@ def ticket_velocity(concerts: list[ConcertRow], days_back: int = 90) -> float:
     if not concerts:
         return 0.0
     cutoff = date.today() - timedelta(days=days_back)
-    recent = [c for c in concerts if c.date >= cutoff and c.tickets_sold and c.venue_capacity]
-    if not recent:
+    today = date.today()
+    ratios = [
+        sell_through_rate(c.tickets_sold, c.venue_capacity)
+        for c in concerts
+        if cutoff <= c.date <= today
+        and c.tickets_sold is not None
+        and c.venue_capacity is not None
+    ]
+    if not ratios:
         return 0.0
-    ratios = [c.tickets_sold / c.venue_capacity for c in recent]
     return round(float(np.mean(ratios)), 4)
 
 
-def seasonality_factor(target_date: date, city: str) -> float:
+def seasonality_factor(target_date: date, city: str = "") -> float:
     """
-    Simple month-of-year + weekend multiplier as a 0–1 score.
-    Summer + Friday/Saturday = higher demand.  Expand with city-level data later.
+    Month-of-year + weekend multiplier as a 0-1 score.
+    This keeps the repo's existing demand curve, where late-summer weekends are
+    the strongest and winter weekdays are softer.
     """
-    month_weights = {1:.55, 2:.5, 3:.6, 4:.7, 5:.75, 6:.9,
-                     7:.95, 8:1.0, 9:.85, 10:.8, 11:.65, 12:.6}
+    month_weights = {
+        1: 0.55, 2: 0.50, 3: 0.60, 4: 0.70, 5: 0.75, 6: 0.90,
+        7: 0.95, 8: 1.00, 9: 0.85, 10: 0.80, 11: 0.65, 12: 0.60,
+    }
     base = month_weights.get(target_date.month, 0.7)
     weekend_bonus = 0.1 if target_date.weekday() in WEEKEND_DAYS else 0.0
     return min(1.0, base + weekend_bonus)
+
+
+def resolve_venue_capacity(
+    venue_name: str,
+    city: str,
+    *,
+    country: str = "",
+    venue_type: str = "",
+    artist_tier: Optional[str] = None,
+    supplied_capacity: Optional[int] = None,
+    source_texts: Optional[list[str]] = None,
+    db_url: Optional[str] = None,
+):
+    """Resolve venue capacity with extraction, DB lookup, validation, and fallback estimation."""
+    from ..venue_capacity.resolver import resolve_venue_capacity as _resolve_venue_capacity
+    from .schemas import VenueCapacityInput
+
+    return _resolve_venue_capacity(
+        VenueCapacityInput(
+            venue_name=venue_name or "venue",
+            city=city,
+            country=country,
+            venue_type=venue_type or "",
+            artist_tier=artist_tier,
+            supplied_capacity=supplied_capacity,
+            source_texts=source_texts or [],
+            db_url=db_url,
+        )
+    )
+
+
+def infer_venue_capacity(city: str, artist_tier: str) -> int:
+    """
+    Infer venue capacity based on Indian city tier and artist tier.
+    Useful when explicit capacity is not available.
+    """
+    capacity_result = resolve_venue_capacity(
+        "venue",
+        city,
+        country="",
+        artist_tier=artist_tier,
+    )
+    return int(capacity_result.capacity)
+
+
+def artist_city_popularity(global_popularity: float, city: str, genre_affinity: float = 1.0) -> float:
+    """
+    Calculate artist city popularity based on their global popularity, 
+    the city's market size in India, and an optional genre/language affinity multiplier.
+    Returns a score from 0 to 100.
+    """
+    city_lower = (city or "").lower()
+    
+    # Market penetration multipliers for Indian cities
+    market_multipliers = {
+        "mumbai": 1.20,
+        "delhi": 1.15,
+        "new delhi": 1.15,
+        "bangalore": 1.20, 
+        "bengaluru": 1.20,
+        "hyderabad": 1.05,
+        "pune": 1.10,
+        "kolkata": 0.95,
+        "chennai": 0.90,  # Highly dependent on genre (e.g. Tamil/International vs Bollywood)
+        "ahmedabad": 0.85,
+        "chandigarh": 0.90, # High affinity for Punjabi music
+        "jaipur": 0.80
+    }
+    
+    # Default to 0.7 for smaller/tier-3 cities
+    multiplier = market_multipliers.get(city_lower, 0.7)
+    
+    city_pop = global_popularity * multiplier * genre_affinity
+    return min(100.0, max(0.0, city_pop))

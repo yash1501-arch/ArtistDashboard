@@ -290,7 +290,7 @@ export abstract class BasePlaywrightScraper implements ConcertSourceScraper {
     return this.pickString(record?.name, record?.addressCountry);
   }
 
-  private textFrom(root: cheerio.Cheerio<cheerio.Element>, selectors: string[]): string | undefined {
+  private textFrom(root: any, selectors: string[]): string | undefined {
     for (const selector of selectors) {
       const text = root.find(selector).first().text().replace(/\s+/g, ' ').trim();
       if (text) return text;
@@ -298,7 +298,7 @@ export abstract class BasePlaywrightScraper implements ConcertSourceScraper {
     return undefined;
   }
 
-  private attrFrom(root: cheerio.Cheerio<cheerio.Element>, selectors: string[], attribute: string): string | undefined {
+  private attrFrom(root: any, selectors: string[], attribute: string): string | undefined {
     for (const selector of selectors) {
       const value = root.find(selector).first().attr(attribute);
       if (value) return value;

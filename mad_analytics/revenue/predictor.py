@@ -22,7 +22,7 @@ from ..utils.schemas import RevenueInput, RevenueOutput
 from ..utils import model_store
 from ..utils.feature_engineering import (
     metrics_to_df, concert_base_features, infer_artist_tier,
-    rog, platform_series, PLATFORM_PRIMARY_METRIC,
+    resolve_venue_capacity, rog, platform_series, PLATFORM_PRIMARY_METRIC,
 )
 from ..demand.scorer import calculate as demand_calculate
 from ..utils.schemas import DemandInput
@@ -45,7 +45,20 @@ def _build_feature_row(payload: RevenueInput) -> dict:
     features = concert_base_features(concert)
 
     # Artist tier
-    features["artist_tier"] = infer_artist_tier(metrics)
+    artist_tier = infer_artist_tier(metrics)
+    features["artist_tier"] = artist_tier
+
+    if concert.venue_name:
+        capacity_result = resolve_venue_capacity(
+            concert.venue_name,
+            concert.city,
+            country=concert.country,
+            venue_type=concert.venue_type or "",
+            artist_tier=artist_tier,
+            supplied_capacity=concert.venue_capacity,
+        )
+        features["venue_capacity"] = capacity_result.capacity
+        features["max_revenue_naive"] = capacity_result.capacity * features["avg_ticket_price"]
 
     # Demand score — use pre-computed or compute inline
     if payload.demand_score is not None:
@@ -126,6 +139,31 @@ def _confidence(lower: float, upper: float, predicted: float) -> float:
     return round(min(0.95, max(0.1, 1 - relative_width / 2)), 3)
 
 
+def _heuristic_revenue(feature_dict: dict) -> float:
+    """Economics-based baseline used for cold start and model calibration."""
+    capacity = feature_dict["venue_capacity"]
+    avg_price = feature_dict["avg_ticket_price"]
+    demand_score = feature_dict["demand_score"]
+
+    base_sell_through = 0.25
+    demand_factor = (demand_score - 10) / 85
+
+    if capacity < 1000:
+        venue_factor = 1.3
+    elif capacity < 5000:
+        venue_factor = 1.1
+    elif capacity < 20000:
+        venue_factor = 1.0
+    else:
+        venue_factor = 0.8
+
+    sell_through = max(0.15, min(0.85, base_sell_through + demand_factor * 0.5))
+    sell_through *= venue_factor
+    sell_through = max(0.15, min(0.90, sell_through))
+
+    return capacity * avg_price * sell_through
+
+
 def calculate(payload: RevenueInput) -> RevenueOutput:
     """
     Predict concert revenue.
@@ -145,26 +183,35 @@ def calculate(payload: RevenueInput) -> RevenueOutput:
         X = preprocessor.transform(row_df)
         predicted = float(model.predict(X)[0])
 
-        # Quantile estimates via individual tree predictions (GBR)
+        # Quantile estimates via staged ensemble predictions. Individual
+        # GradientBoostingRegressor trees are residual learners, not complete
+        # revenue predictions, so their raw percentiles can sit below the
+        # final ensemble prediction.
         try:
-            tree_preds = np.array([
-                e.predict(X) for e in model.estimators_.flatten()
-            ])
-            lower = float(np.percentile(tree_preds, 10))
-            upper = float(np.percentile(tree_preds, 90))
+            stage_preds = np.array([float(stage[0]) for stage in model.staged_predict(X)])
+            lower = float(np.percentile(stage_preds, 10))
+            upper = float(np.percentile(stage_preds, 90))
         except Exception:
             lower = predicted * 0.75
             upper = predicted * 1.25
+
+        heuristic_predicted = _heuristic_revenue(feature_dict)
+        model_weight = 0.55
+        heuristic_weight = 1 - model_weight
+        predicted = predicted * model_weight + heuristic_predicted * heuristic_weight
+        lower = lower * model_weight + heuristic_predicted * heuristic_weight
+        upper = upper * model_weight + heuristic_predicted * heuristic_weight
+
+        if lower > predicted or upper < predicted or lower == upper:
+            spread = max(abs(predicted - lower), abs(upper - predicted), predicted * 0.2, 1.0)
+            lower = predicted - spread
+            upper = predicted + spread
 
         importances = _feature_importances(model, preprocessor, row_df)
 
     else:
         # ── Rule-based fallback (no trained model yet) ────────────────────────
-        capacity       = feature_dict["venue_capacity"]
-        avg_price      = feature_dict["avg_ticket_price"]
-        demand_score   = feature_dict["demand_score"]
-        sell_through   = 0.5 + (demand_score / 100) * 0.4  # 50–90%
-        predicted      = capacity * avg_price * sell_through
+        predicted      = _heuristic_revenue(feature_dict)
         lower          = predicted * 0.70
         upper          = predicted * 1.30
         importances    = {
@@ -175,14 +222,38 @@ def calculate(payload: RevenueInput) -> RevenueOutput:
             "seasonality":       0.10,
         }
 
+    # ── Currency conversion ───────────────────────────────────────────────
+    # The model predicts in the training currency (mixed, mostly INR/USD).
+    # Convert to the concert's local currency for accurate display.
+    from ..utils.currency import resolve_currency, usd_to_local, local_to_usd, get_exchange_rate
+
+    local_currency = resolve_currency(concert.country)
+    exchange_rate = get_exchange_rate(local_currency)
+
+    # The model's prediction is in the same scale as training data (local prices × capacity).
+    # Since training data uses local ticket prices, the prediction is already in local currency.
+    # We store the USD equivalent for cross-country comparison.
+    predicted_local = round(max(0.0, predicted), 2)
+    lower_local = round(max(0.0, lower), 2)
+    upper_local = round(max(0.0, upper), 2)
+
+    predicted_usd = local_to_usd(predicted_local, local_currency)
+    lower_usd = local_to_usd(lower_local, local_currency)
+    upper_usd = local_to_usd(upper_local, local_currency)
+
     return RevenueOutput(
         concert_id=concert.concert_id,
         artist_id=concert.artist_id,
-        predicted_revenue=round(max(0.0, predicted), 2),
-        lower_bound=round(max(0.0, lower), 2),
-        upper_bound=round(max(0.0, upper), 2),
+        predicted_revenue=predicted_local,
+        lower_bound=lower_local,
+        upper_bound=upper_local,
         confidence=_confidence(lower, upper, predicted),
         demand_score_used=feature_dict["demand_score"],
         feature_importances=importances,
         computed_at=datetime.now(timezone.utc).isoformat(),
+        currency=local_currency,
+        predicted_revenue_usd=predicted_usd,
+        lower_bound_usd=lower_usd,
+        upper_bound_usd=upper_usd,
+        exchange_rate=exchange_rate,
     )

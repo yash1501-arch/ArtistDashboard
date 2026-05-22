@@ -31,6 +31,7 @@ model Artist {
   spotifyMonthlyListeners BigInt?
   youtubeSubscribers      BigInt?
   appleMusicListeners     BigInt?
+  popularity              Decimal?              @db.Decimal(5, 2)
   lastUpdated             DateTime?
   created_at              DateTime              @default(now())
   updated_at              DateTime              @updatedAt

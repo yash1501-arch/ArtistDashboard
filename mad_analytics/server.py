@@ -23,15 +23,25 @@ Express integration
     const data = await res.json();
 """
 from __future__ import annotations
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from .utils.schemas import GrowthInput, DemandInput, RevenueInput, PopularityInput
+from .utils.schemas import (
+    GrowthInput,
+    DemandInput,
+    RevenueInput,
+    PopularityInput,
+    LlmPredictorInput,
+    VenueCapacityInput,
+)
 from .growth.rog_calculator import calculate as growth_calc
 from .demand.scorer import calculate as demand_calc
 from .revenue.predictor import calculate as revenue_calc
+from .revenue.llm_model import calculate as llm_calc
 from .popularity import calculate as popularity_calc, calculate_all as popularity_calc_all
 from .utils.db import persist_popularity_scores, fetch_saved_popularity
+from .venue_capacity import calculate as venue_capacity_calc
+from .venue_capacity.resolver import fetch_saved_capacity_resolutions
 
 app = FastAPI(title="MAD Analytics", version="1.0.0")
 
@@ -47,6 +57,59 @@ app.add_middleware(
 def health():
     return {"status": "ok", "service": "mad_analytics"}
 
+@app.post("/llm-predict")
+def llm_predict(payload: LlmPredictorInput):
+    try:
+        return llm_calc(payload)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+@app.post("/venue-capacity")
+def venue_capacity(payload: VenueCapacityInput):
+    try:
+        return venue_capacity_calc(payload)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+@app.get("/venue-capacity/saved")
+def venue_capacity_saved(db_url: str | None = Query(default=None)):
+    try:
+        return fetch_saved_capacity_resolutions(db_url)
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+@app.post("/venue-capacity/enrich")
+def venue_capacity_enrich(dry_run: bool = Query(default=False)):
+    """Batch-resolve venue capacities from concert data and persist results."""
+    import os
+    from .training.enrich_venues import (
+        load_venues_from_concerts,
+        load_existing_venues,
+        resolve_batch,
+        backfill_concerts,
+    )
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        raise HTTPException(status_code=500, detail="DATABASE_URL not configured")
+    try:
+        df = load_venues_from_concerts(db_url)
+        existing = load_existing_venues(db_url)
+        results = resolve_batch(df, db_url, existing, dry_run=dry_run)
+        updated = backfill_concerts(results, db_url, dry_run=dry_run)
+        summary = {
+            "total_venues": len(results),
+            "validated": sum(1 for r in results if r["status"] == "validated"),
+            "estimated": sum(1 for r in results if r["status"] == "estimated"),
+            "review_required": sum(1 for r in results if r["status"] == "review_required"),
+            "already_verified": sum(1 for r in results if r["status"] == "already_verified"),
+            "capacity_updates": sum(1 for r in results if r["action"] == "update"),
+            "concerts_updated": updated,
+            "dry_run": dry_run,
+            "changes": [r for r in results if r["action"] == "update"],
+        }
+        return summary
+    except Exception as e:
+        raise HTTPException(status_code=422, detail=str(e))
 
 @app.post("/growth")
 def growth(payload: GrowthInput):

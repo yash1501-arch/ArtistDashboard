@@ -148,16 +148,15 @@ export async function getArtistPopularityFromDb(artistName: string): Promise<num
       throw new Error(`Artist "${artistName}" not found or not active`);
     }
 
-    // Extract social media metrics from either direct fields or latest platform metrics
-    const platformMetrics = artist.platformMetrics[0];
-
+    // Extract social media metrics from the artist's direct fields
+    // (PlatformMetric rows have followers/streams per platform, not named fields)
     const artistData: ArtistPopularityInput = {
-      spotifyMonthlyListeners: platformMetrics?.spotifyMonthlyListeners ?? artist.spotifyMonthlyListeners,
-      youtubeSubscribers: platformMetrics?.youtubeSubscribers ?? artist.youtubeSubscribers,
-      instagramFollowers: platformMetrics?.instagramFollowers ?? artist.instagramFollowers,
-      facebookFollowers: platformMetrics?.facebookFollowers ?? artist.facebookFollowers,
-      twitterFollowers: platformMetrics?.twitterFollowers ?? artist.twitterFollowers,
-      appleMusicListeners: platformMetrics?.appleMusicListeners ?? artist.appleMusicListeners
+      spotifyMonthlyListeners: artist.spotifyMonthlyListeners,
+      youtubeSubscribers: artist.youtubeSubscribers,
+      instagramFollowers: artist.instagramFollowers,
+      facebookFollowers: artist.facebookFollowers,
+      twitterFollowers: artist.twitterFollowers,
+      appleMusicListeners: artist.appleMusicListeners
     };
 
     console.log(`Found artist: ${artist.artistName}`);

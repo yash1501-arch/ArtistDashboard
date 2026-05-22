@@ -12,6 +12,14 @@ import RoGBadge from '../components/ui/RoGBadge'
 import { formatNumber, formatCurrency } from '../utils/formatters'
 import { useArtists } from '../hooks/useArtists'
 import { useConcerts } from '../hooks/useConcerts'
+import {
+  useAutoPredict,
+  useMadGrowth,
+  useMadDemand,
+  useMadPopularity,
+  useMadLlmPrediction,
+  useMadVenueCapacity,
+} from '../hooks/usePredictions'
 
 const TABS = ['Profitability Predictor', 'Artist Comparison']
 
@@ -61,6 +69,46 @@ function predictRevenue(artist, city, artistConcerts = []) {
   }
 }
 
+function predictionDate() {
+  const date = new Date()
+  date.setDate(date.getDate() + 30)
+  return date.toISOString().slice(0, 10)
+}
+
+function applyModelPrediction(fallback, model) {
+  if (!fallback || !model?.predicted_revenue) return fallback
+
+  const capacity = Number(model.inputs?.venue_capacity || fallback.adjustedCap || 0)
+  const atp = Number(model.inputs?.avg_ticket_price || fallback.atp || 0)
+  const totalRevenue = Number(model.predicted_revenue || 0)
+  const ticketsSold = capacity > 0 && atp > 0
+    ? Math.min(capacity, Math.round(totalRevenue / atp))
+    : fallback.ticketsSold
+  const sellThrough = capacity > 0 ? (ticketsSold / capacity) * 100 : fallback.sellThrough
+  const estimatedCost = totalRevenue * 0.45
+
+  return {
+    ...fallback,
+    adjustedCap: capacity || fallback.adjustedCap,
+    ticketsSold,
+    atp: atp || fallback.atp,
+    ticketRevenue: totalRevenue,
+    sponsorRevenue: 0,
+    totalRevenue,
+    sellThrough,
+    roi: estimatedCost > 0 ? ((totalRevenue - estimatedCost) / estimatedCost) * 100 : fallback.roi,
+    popularityScore: Math.min(99, Math.round(Number(model.demand_score_used || fallback.popularityScore))),
+    demandScore: Math.round(Number(model.demand_score_used || fallback.demandScore)),
+    confidence: Math.round(Number(model.confidence || 0) * 100),
+    lowerBound: Number(model.lower_bound || 0),
+    upperBound: Number(model.upper_bound || 0),
+    modelSource: model.model_source || 'mad_analytics',
+    currency: model.currency || 'INR',
+    totalRevenueUsd: Number(model.predicted_revenue_usd || 0),
+    exchangeRate: Number(model.exchange_rate || 1),
+  }
+}
+
 // Score bar component
 function ScoreBar({ label, value, max = 100, color }) {
   return (
@@ -100,7 +148,26 @@ function ProfitabilityPredictor({ artists, concerts }) {
   const city = CITIES.find(c => c.name === selectedCity)
 
   const artistConcerts = concerts.filter(c => c.artistId === selectedArtist)
-  const pred = predictRevenue(artist, city, artistConcerts)
+  const fallbackPred = predictRevenue(artist, city, artistConcerts)
+  const modelPrediction = useAutoPredict(selectedArtist, selectedCity, fallbackPred?.adjustedCap, Boolean(selectedArtist && selectedCity), {
+    artistName: artist?.name,
+    country: 'India',
+    avgTicketPrice: fallbackPred?.atp,
+    eventDate: predictionDate(),
+  })
+  const pred = applyModelPrediction(fallbackPred, modelPrediction.data)
+  const growth = useMadGrowth(selectedArtist, Boolean(selectedArtist))
+  const demand = useMadDemand(selectedArtist, selectedCity, Boolean(selectedArtist && selectedCity), { country: 'India', targetDate: predictionDate() })
+  const popularity = useMadPopularity(selectedArtist, Boolean(selectedArtist))
+  const llmPrediction = useMadLlmPrediction(selectedArtist, selectedCity, fallbackPred?.adjustedCap, Boolean(selectedArtist && selectedCity), {
+    artistName: artist?.name,
+    venueName: city ? `${city.name} Arena` : 'Arena',
+    venueType: 'arena',
+  })
+  const venueCapacity = useMadVenueCapacity(city ? `${city.name} Arena` : '', selectedCity, Boolean(selectedCity), {
+    venueType: 'arena',
+    suppliedCapacity: fallbackPred?.adjustedCap,
+  })
 
   // City comparison for selected artist
   const cityComparison = artist
@@ -197,17 +264,62 @@ function ProfitabilityPredictor({ artists, concerts }) {
               style={{ background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)' }}>
               <Zap size={13} style={{ color: 'var(--accent-indigo)' }} />
               <span className="text-xs font-semibold" style={{ color: 'var(--accent-indigo)' }}>
-                AI Prediction
+                {modelPrediction.isFetching ? 'Running Model' : pred.modelSource ? 'MAD Analytics' : 'Fallback Estimate'}
               </span>
             </div>
           </div>
 
+          {modelPrediction.error && (
+            <div className="mb-4 rounded-xl px-4 py-3 text-xs"
+              style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', color: 'var(--accent-gold)' }}>
+              Python analytics service unavailable. Showing fallback estimate.
+            </div>
+          )}
+
           {/* KPI Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-            <StatBox label="Predicted Revenue" value={formatCurrency(pred.totalRevenue)} color="var(--accent-gold)" delay={0} />
+            <StatBox label="Predicted Revenue" value={formatCurrency(pred.totalRevenue, pred.currency)} color="var(--accent-gold)" delay={0} />
             <StatBox label="Est. Tickets Sold" value={formatNumber(pred.ticketsSold)} color="var(--accent-indigo)" delay={80} />
-            <StatBox label="Avg. Ticket Price" value={formatCurrency(pred.atp)} color="var(--accent-green)" delay={160} />
-            <StatBox label="Projected ROI" value={`${pred.roi.toFixed(1)}%`} color={pred.roi > 50 ? 'var(--accent-green)' : 'var(--accent-gold)'} delay={240} />
+            <StatBox label="Avg. Ticket Price" value={formatCurrency(pred.atp, pred.currency)} color="var(--accent-green)" delay={160} />
+            <StatBox
+              label={pred.modelSource ? 'Model Confidence' : 'Projected ROI'}
+              value={pred.modelSource ? `${pred.confidence}%` : `${pred.roi.toFixed(1)}%`}
+              color={pred.modelSource || pred.roi > 50 ? 'var(--accent-green)' : 'var(--accent-gold)'}
+              delay={240}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 mb-6">
+            <StatBox
+              label="Growth Score"
+              value={growth.data ? `${growth.data.cross_platform_score?.toFixed?.(1) ?? growth.data.cross_platform_score}` : '—'}
+              sub={growth.data?.platforms?.[0] ? `${growth.data.platforms[0].platform} ${growth.data.platforms[0].rog_30d?.toFixed?.(1) ?? growth.data.platforms[0].rog_30d}%` : 'No growth data'}
+              color="var(--accent-indigo)"
+            />
+            <StatBox
+              label="Demand Score"
+              value={demand.data ? `${demand.data.score?.toFixed?.(1) ?? demand.data.score}` : '—'}
+              sub={demand.data?.components ? `SV ${Math.round((demand.data.components.social_velocity || 0) * 100)}%` : 'No demand data'}
+              color="var(--accent-gold)"
+            />
+            <StatBox
+              label="Popularity"
+              value={popularity.data ? `${popularity.data.popularity_score?.toFixed?.(1) ?? popularity.data.popularity_score}` : '—'}
+              sub={popularity.data?.platform_weights ? 'Entropy weighted' : 'No popularity data'}
+              color="var(--accent-green)"
+            />
+            <StatBox
+              label="LLM Revenue"
+              value={llmPrediction.data ? formatCurrency(llmPrediction.data.total_revenue, llmPrediction.data.currency) : '—'}
+              sub={llmPrediction.data ? `${llmPrediction.data.tickets_sold} tickets` : 'No LLM data'}
+              color="var(--accent-gold)"
+            />
+            <StatBox
+              label="Venue Capacity"
+              value={venueCapacity.data ? formatNumber(venueCapacity.data.capacity) : '—'}
+              sub={venueCapacity.data ? venueCapacity.data.status : 'No venue data'}
+              color="var(--accent-indigo)"
+            />
           </div>
 
           {/* Score Bars + Revenue Breakdown */}
@@ -220,7 +332,7 @@ function ProfitabilityPredictor({ artists, concerts }) {
                 <ScoreBar label="Popularity Score" value={pred.popularityScore} color="#818CF8" />
                 <ScoreBar label="City Demand Index" value={pred.demandScore} color="#FBBF24" />
                 <ScoreBar label="Sell-Through Rate" value={Math.round(pred.sellThrough)} color="#34D399" />
-                <ScoreBar label="Revenue Confidence" value={Math.min(Math.round(pred.popularityScore * 0.85 + 10), 97)} color="#F87171" />
+                <ScoreBar label="Revenue Confidence" value={pred.modelSource ? pred.confidence : Math.min(Math.round(pred.popularityScore * 0.85 + 10), 97)} color="#F87171" />
               </div>
 
               {/* Verdict */}
@@ -248,12 +360,22 @@ function ProfitabilityPredictor({ artists, concerts }) {
             </div>
 
             {/* Revenue breakdown */}
-            <ChartContainer title="Revenue Breakdown" subtitle="Ticket vs sponsor contribution" delay={180}>
+            <ChartContainer
+              title={pred.modelSource ? 'Prediction Range' : 'Revenue Breakdown'}
+              subtitle={pred.modelSource ? 'Lower, predicted and upper model bounds' : 'Ticket vs sponsor contribution'}
+              delay={180}
+            >
               <BarChart
-                data={[
-                  { name: 'Ticket Revenue', value: Math.round(pred.ticketRevenue) },
-                  { name: 'Sponsor Revenue', value: Math.round(pred.sponsorRevenue) },
-                ]}
+                data={pred.modelSource
+                  ? [
+                    { name: 'Lower Bound', value: Math.round(pred.lowerBound) },
+                    { name: 'Prediction', value: Math.round(pred.totalRevenue) },
+                    { name: 'Upper Bound', value: Math.round(pred.upperBound) },
+                  ]
+                  : [
+                    { name: 'Ticket Revenue', value: Math.round(pred.ticketRevenue) },
+                    { name: 'Sponsor Revenue', value: Math.round(pred.sponsorRevenue) },
+                  ]}
                 xKey="name"
                 layout="horizontal"
                 bars={[{ key: 'value', label: 'Revenue (INR)', color: '#818CF8' }]}

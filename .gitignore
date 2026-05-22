@@ -47,7 +47,9 @@ backend/prisma/migrations/*/migration_lock.toml
 # Python/ML ignores
 backend/ml_engine/venv/
 backend/ml_engine/__pycache__/
+__pycache__/
 *.pyc
+.pytest_cache/
 
 # Test and coverage reports
 backend/coverage/

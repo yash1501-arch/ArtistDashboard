@@ -1,7 +1,7 @@
 import { BasePlaywrightScraper } from './basePlaywrightScraper';
 import { ConcertSourcePlatform, ScrapeQuery } from './types';
 
-export class ZomatoScraper extends BasePlaywrightScraper {
+class ZomatoScraperImpl extends BasePlaywrightScraper {
   readonly source: ConcertSourcePlatform = 'BOOKMYSHOW';
   protected readonly cardSelectors = [
     '[data-testid*="event"]',
@@ -34,4 +34,4 @@ export class ZomatoScraper extends BasePlaywrightScraper {
   }
 }
 
-export const ZomatoScraper = new ZomatoScraper();
+export const ZomatoScraper = new ZomatoScraperImpl();

@@ -259,7 +259,9 @@ class TestRevenuePredictor:
     def test_feature_importances_sum(self):
         out = revenue_calc(self._payload())
         total = sum(out.feature_importances.values())
-        assert abs(total - 1.0) < 0.01, f"Importances should sum to ~1, got {total}"
+        # Top-10 features should account for at least 95% of total importance
+        assert total > 0.95, f"Top importances should sum to >0.95, got {total}"
+        assert total <= 1.01, f"Importances should not exceed 1.0, got {total}"
 
     def test_pre_computed_demand_score(self):
         """Passing demand_score should skip internal demand calculation."""
