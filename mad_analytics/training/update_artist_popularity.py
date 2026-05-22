@@ -80,7 +80,7 @@ def main():
     for output in sorted_outputs:
         print(f"  {output.artist_id:<38} {output.popularity_score:>6.2f}")
 
-    print(f"\n✓ All popularity scores saved to artists.popularity column.")
+    print(f"\n[OK] All popularity scores saved to artists.popularity column.")
 
 
 if __name__ == "__main__":

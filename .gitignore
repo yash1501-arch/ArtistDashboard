@@ -51,6 +51,12 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Environment files with secrets (never commit these)
+.env
+.env.*
+!.env.example
+!.env.test
+
 # Test and coverage reports
 backend/coverage/
 backend/test-reports/

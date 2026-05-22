@@ -41,9 +41,9 @@ function predictRevenue(artist, city, artistConcerts = []) {
   let avgTicketsSold = 15000
   let avgAtp = 2000
   if (artistConcerts.length > 0) {
-    const totalTix = artistConcerts.reduce((s, c) => s + c.tickets_sold, 0)
-    const totalRev = artistConcerts.reduce((s, c) => s + c.total_revenue, 0)
-    const totalAtp = artistConcerts.reduce((s, c) => s + (c.avg_ticket_price || 0), 0)
+    const totalTix = artistConcerts.reduce((s, c) => s + (c.ticketsSold || 0), 0)
+    const totalRev = artistConcerts.reduce((s, c) => s + (c.totalRevenue || 0), 0)
+    const totalAtp = artistConcerts.reduce((s, c) => s + (c.avgTicketPrice || 0), 0)
 
     avgTicketsSold = Math.floor(totalTix / artistConcerts.length) || 15000
     avgAtp = (totalAtp / artistConcerts.length) || (totalRev / totalTix) || 2000
@@ -432,8 +432,8 @@ function ArtistComparison({ artists, concerts }) {
     return {
       totalFollowers: followersValues.reduce((s, v) => s + v, 0),
       avgRoG: rogValues.reduce((s, v) => s + v, 0) / (rogValues.length || 1),
-      totalRevenue: artistConcerts.reduce((s, c) => s + c.total_revenue, 0),
-      totalTickets: artistConcerts.reduce((s, c) => s + c.tickets_sold, 0),
+      totalRevenue: artistConcerts.reduce((s, c) => s + (c.totalRevenue || 0), 0),
+      totalTickets: artistConcerts.reduce((s, c) => s + (c.ticketsSold || 0), 0),
       concertCount: artistConcerts.length,
       topPlatform: Object.entries(artist.followers || {}).sort((x, y) => y[1] - x[1])[0] || ['Unknown', 0],
     }

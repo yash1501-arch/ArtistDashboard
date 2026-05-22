@@ -1,34 +1,47 @@
-// Format numbers → 1,200,000 → "1.2M"
+// Format numbers: 1,200,000 -> "1.2M"
 export function formatNumber(num) {
-  if (!num && num !== 0) return '—'
+  if (!num && num !== 0) return '\u2014'
   if (num >= 1_000_000_000) return (num / 1_000_000_000).toFixed(1) + 'B'
   if (num >= 1_000_000)     return (num / 1_000_000).toFixed(1) + 'M'
   if (num >= 1_000)         return (num / 1_000).toFixed(1) + 'K'
   return num.toLocaleString('en-IN')
 }
 
-// Format currency → supports multiple currencies with proper symbols and locale
-export function formatCurrency(num, currency = 'INR') {
-  if (!num && num !== 0) return '—'
-  
-  const code = (currency || 'INR').toUpperCase()
-  
-  // Currency symbols and formatting config
-  const currencyConfig = {
-    INR: { symbol: '₹', locale: 'en-IN', compact: { cr: 10_000_000, l: 100_000, k: 1_000 } },
-    USD: { symbol: '$', locale: 'en-US', compact: { m: 1_000_000, k: 1_000 } },
-    EUR: { symbol: '€', locale: 'en-DE', compact: { m: 1_000_000, k: 1_000 } },
-    GBP: { symbol: '£', locale: 'en-GB', compact: { m: 1_000_000, k: 1_000 } },
-    AUD: { symbol: 'A$', locale: 'en-AU', compact: { m: 1_000_000, k: 1_000 } },
-    CAD: { symbol: 'C$', locale: 'en-CA', compact: { m: 1_000_000, k: 1_000 } },
-    AED: { symbol: 'د.إ', locale: 'ar-AE', compact: { m: 1_000_000, k: 1_000 } },
-    SGD: { symbol: 'S$', locale: 'en-SG', compact: { m: 1_000_000, k: 1_000 } },
-    NZD: { symbol: 'NZ$', locale: 'en-NZ', compact: { m: 1_000_000, k: 1_000 } },
-    JPY: { symbol: '¥', locale: 'ja-JP', compact: { m: 1_000_000, k: 1_000 } },
+// Format currency with proper symbol based on currency code or country
+// Accepts: formatCurrency(175000) -> "₹1.75L"
+//          formatCurrency(45000, 'USD') -> "$45.0K"
+//          formatCurrency(165000, { country: 'United Arab Emirates' }) -> "AED 165.0K"
+export function formatCurrency(num, currencyOrOpts = 'INR') {
+  if (!num && num !== 0) return '\u2014'
+
+  // Resolve currency code from either a string or { country, currency } object
+  let code = 'INR'
+  if (typeof currencyOrOpts === 'string') {
+    code = currencyOrOpts.toUpperCase()
+  } else if (currencyOrOpts && typeof currencyOrOpts === 'object') {
+    if (currencyOrOpts.currency) {
+      code = String(currencyOrOpts.currency).toUpperCase()
+    } else if (currencyOrOpts.country) {
+      code = resolveCountryCurrency(String(currencyOrOpts.country))
+    }
   }
-  
-  const config = currencyConfig[code] || { symbol: code + ' ', locale: 'en-US', compact: { m: 1_000_000, k: 1_000 } }
-  
+
+  const currencyConfig = {
+    INR: { symbol: '\u20B9', locale: 'en-IN' },
+    USD: { symbol: '$', locale: 'en-US' },
+    EUR: { symbol: '\u20AC', locale: 'en-DE' },
+    GBP: { symbol: '\u00A3', locale: 'en-GB' },
+    AUD: { symbol: 'A$', locale: 'en-AU' },
+    CAD: { symbol: 'C$', locale: 'en-CA' },
+    AED: { symbol: 'AED ', locale: 'en-AE' },
+    SGD: { symbol: 'S$', locale: 'en-SG' },
+    NZD: { symbol: 'NZ$', locale: 'en-NZ' },
+    JPY: { symbol: '\u00A5', locale: 'ja-JP' },
+    KRW: { symbol: '\u20A9', locale: 'ko-KR' },
+  }
+
+  const config = currencyConfig[code] || { symbol: code + ' ', locale: 'en-US' }
+
   // Indian notation (Cr, L, K)
   if (code === 'INR') {
     if (num >= 10_000_000) return config.symbol + (num / 10_000_000).toFixed(2) + 'Cr'
@@ -36,24 +49,41 @@ export function formatCurrency(num, currency = 'INR') {
     if (num >= 1_000)      return config.symbol + (num / 1_000).toFixed(1) + 'K'
     return config.symbol + num.toLocaleString('en-IN')
   }
-  
-  // Western notation (M, K)
+
+  // Western notation (B, M, K)
   if (num >= 1_000_000_000) return config.symbol + (num / 1_000_000_000).toFixed(2) + 'B'
   if (num >= 1_000_000)     return config.symbol + (num / 1_000_000).toFixed(2) + 'M'
   if (num >= 1_000)         return config.symbol + (num / 1_000).toFixed(1) + 'K'
   return config.symbol + num.toLocaleString(config.locale)
 }
 
-// Format RoG → 12.4 → "+12.4%"
+// Resolve currency code from country name
+function resolveCountryCurrency(country) {
+  if (!country) return 'INR'
+  const lower = country.toLowerCase()
+  if (lower.includes('india')) return 'INR'
+  if (lower.includes('united states') || lower === 'usa' || lower === 'us') return 'USD'
+  if (lower.includes('united kingdom') || lower === 'uk') return 'GBP'
+  if (lower.includes('australia')) return 'AUD'
+  if (lower.includes('canada')) return 'CAD'
+  if (lower.includes('united arab') || lower === 'uae') return 'AED'
+  if (lower.includes('singapore')) return 'SGD'
+  if (lower.includes('new zealand')) return 'NZD'
+  if (lower.includes('japan')) return 'JPY'
+  if (['germany', 'france', 'italy', 'spain', 'netherlands', 'ireland', 'austria', 'belgium', 'portugal', 'finland'].some(c => lower.includes(c))) return 'EUR'
+  return 'USD'
+}
+
+// Format RoG: 12.4 -> "+12.4%"
 export function formatRoG(value) {
-  if (!value && value !== 0) return '—'
+  if (!value && value !== 0) return '\u2014'
   const sign = value >= 0 ? '+' : ''
   return `${sign}${value.toFixed(1)}%`
 }
 
-// Format date → "2024-03-15" → "15 Mar 2024"
+// Format date: "2024-03-15" -> "15 Mar 2024"
 export function formatDate(dateStr) {
-  if (!dateStr) return '—'
+  if (!dateStr) return '\u2014'
   return new Date(dateStr).toLocaleDateString('en-IN', {
     day:   '2-digit',
     month: 'short',
@@ -61,25 +91,25 @@ export function formatDate(dateStr) {
   })
 }
 
-// Format percentage → 0.742 → "74.2%"
+// Format percentage: 0.742 -> "74.2%"
 export function formatPercent(value) {
-  if (!value && value !== 0) return '—'
+  if (!value && value !== 0) return '\u2014'
   return `${(value * 100).toFixed(1)}%`
 }
 
-// Sell-through % → tickets sold / capacity
+// Sell-through %: tickets sold / capacity
 export function sellThrough(sold, capacity) {
-  if (!capacity) return '—'
+  if (!capacity) return '\u2014'
   return `${((sold / capacity) * 100).toFixed(1)}%`
 }
 
 // Truncate long text
 export function truncate(str, maxLength = 40) {
-  if (!str) return '—'
+  if (!str) return '\u2014'
   return str.length > maxLength ? str.slice(0, maxLength) + '...' : str
 }
 
-// Platform display names & colours
+// Platform display names and colours
 export const PLATFORM_META = {
   instagram:   { label: 'Instagram',   color: '#E1306C', bg: '#FDE8F1' },
   youtube:     { label: 'YouTube',     color: '#FF0000', bg: '#FFE5E5' },

@@ -192,18 +192,27 @@ def resolve_batch(
         # Check if already resolved in venues table
         existing = existing_venues.get(venue_key)
         if existing and existing.get("verified") and existing.get("avgCapacity"):
-            results.append({
-                "venue_name": venue_name,
-                "city": city,
-                "country": country,
-                "old_capacity": current_capacity,
-                "new_capacity": int(existing["avgCapacity"]),
-                "confidence": 0.96,
-                "status": "already_verified",
-                "source": "venue_db",
-                "action": "skip",
-            })
-            continue
+            existing_cap = int(existing["avgCapacity"])
+            max_sold = _safe_int(row.get("max_tickets_sold"))
+
+            # Validate: if tickets_sold > venue capacity, the venue data is wrong
+            if max_sold > 0 and max_sold > existing_cap:
+                # Don't trust the verified capacity — tickets sold proves it's wrong
+                # Fall through to re-resolve with tickets_sold as the floor
+                pass
+            else:
+                results.append({
+                    "venue_name": venue_name,
+                    "city": city,
+                    "country": country,
+                    "old_capacity": current_capacity,
+                    "new_capacity": existing_cap,
+                    "confidence": 0.96,
+                    "status": "already_verified",
+                    "source": "venue_db",
+                    "action": "skip",
+                })
+                continue
 
         # Infer artist tier for better estimation
         artist_tier = _infer_artist_tier_from_db(artist_id, engine)

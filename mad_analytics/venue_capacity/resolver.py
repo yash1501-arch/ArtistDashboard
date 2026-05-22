@@ -539,6 +539,16 @@ def resolve_venue_capacity(payload: VenueCapacityInput) -> VenueCapacityOutput:
                 )
 
     if not candidates:
+        # Try web search before falling back to heuristic
+        from .web_search import search_venue_capacity
+        web_candidates = search_venue_capacity(
+            payload.venue_name,
+            payload.city,
+            payload.country,
+        )
+        candidates.extend(web_candidates)
+
+    if not candidates:
         candidates.append(
             estimate_capacity(
                 payload.venue_name,

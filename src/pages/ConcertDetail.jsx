@@ -27,16 +27,16 @@ function ConcertDetail() {
     </div>
   )
 
-  const st             = ((concert.tickets_sold / concert.capacity) * 100)
-  const sponsorRevenue = (concert.total_revenue || 0) * 0.15
-  const ticketRevenue  = (concert.total_revenue || 0) - sponsorRevenue
+  const st             = ((concert.ticketsSold / concert.capacity) * 100)
+  const sponsorRevenue = (concert.totalRevenue || 0) * 0.15
+  const ticketRevenue  = (concert.totalRevenue || 0) - sponsorRevenue
 
   const stColor = st >= 95 ? 'var(--accent-green)' : st >= 75 ? 'var(--accent-gold)' : 'var(--accent-red)'
 
   const kpis = [
-    { label: 'Tickets Sold',    value: formatNumber(concert.tickets_sold), sub: `of ${formatNumber(concert.capacity)}`, icon: Ticket,      color: 'var(--accent-indigo)' },
-    { label: 'Avg Ticket Price',value: formatCurrency(concert.avg_ticket_price), sub: 'per ticket',            icon: TrendingUp,  color: 'var(--accent-gold)'   },
-    { label: 'Total Revenue',   value: formatCurrency(concert.total_revenue),    sub: 'incl. sponsors',        icon: DollarSign,  color: 'var(--accent-green)'  },
+    { label: 'Tickets Sold',    value: formatNumber(concert.ticketsSold), sub: `of ${formatNumber(concert.capacity)}`, icon: Ticket,      color: 'var(--accent-indigo)' },
+    { label: 'Avg Ticket Price',value: formatCurrency(concert.avgTicketPrice, { country: concert.country }), sub: 'per ticket',            icon: TrendingUp,  color: 'var(--accent-gold)'   },
+    { label: 'Total Revenue',   value: formatCurrency(concert.totalRevenue, { country: concert.country }),    sub: 'incl. sponsors',        icon: DollarSign,  color: 'var(--accent-green)'  },
     { label: 'Sponsors',        value: concert.sponsors.length,                  sub: 'brand partners',        icon: Star,        color: 'var(--accent-red)'    },
   ]
 

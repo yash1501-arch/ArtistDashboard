@@ -23,8 +23,24 @@ Express integration
     const data = await res.json();
 """
 from __future__ import annotations
+import os
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+
+# Load environment variables from backend/.env if available
+_env_path = Path(__file__).parent.parent / "backend" / ".env"
+if _env_path.exists():
+    with open(_env_path) as f:
+        for line in f:
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                # Only set if not already in environment (don't override explicit env vars)
+                if key and not os.environ.get(key):
+                    os.environ[key] = value
 
 from .utils.schemas import (
     GrowthInput,
@@ -44,6 +60,9 @@ from .venue_capacity import calculate as venue_capacity_calc
 from .venue_capacity.resolver import fetch_saved_capacity_resolutions
 
 app = FastAPI(title="MAD Analytics", version="1.0.0")
+
+# Internal API token for service-to-service auth (optional but recommended)
+INTERNAL_API_TOKEN = os.environ.get("MAD_ANALYTICS_TOKEN")
 
 app.add_middleware(
     CORSMiddleware,

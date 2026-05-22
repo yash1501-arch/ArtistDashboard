@@ -32,8 +32,8 @@ function MapView() {
     selectedArtist === 'All Artists' || c.artist === selectedArtist
   )
 
-  const totalTickets  = filtered.reduce((a, c) => a + (c.tickets_sold || 0), 0)
-  const totalRevenue  = filtered.reduce((a, c) => a + (c.total_revenue || 0), 0)
+  const totalTickets  = filtered.reduce((a, c) => a + (c.ticketsSold || 0), 0)
+  const totalRevenue  = filtered.reduce((a, c) => a + (c.totalRevenue || 0), 0)
 
   if (isLoading) return (
     <div className="flex flex-col items-center justify-center py-20 gap-4 glass-card mx-6 my-10">
@@ -104,7 +104,7 @@ function MapView() {
             {filtered.map(concert => {
               const lat = Number(concert.lat || 0)
               const lng = Number(concert.lng || 0)
-              const tickets = Number(concert.tickets_sold || 0)
+              const tickets = Number(concert.ticketsSold || 0)
               const capacity = Number(concert.capacity || 0)
               
               if (!lat || !lng) return null
@@ -155,12 +155,12 @@ function MapView() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: 'Date',         value: formatDate(selectedConcert.date) },
-                  { label: 'Capacity',     value: formatNumber(selectedConcert.capacity) },
-                  { label: 'Tickets Sold', value: formatNumber(selectedConcert.tickets_sold) },
-                  { label: 'ATP',          value: formatCurrency(selectedConcert.avg_ticket_price) },
-                  { label: 'Revenue',      value: formatCurrency(selectedConcert.total_revenue) },
-                  { label: 'Sell-Through', value: (selectedConcert.capacity > 0 ? ((selectedConcert.tickets_sold / selectedConcert.capacity) * 100).toFixed(1) : '0.0') + '%' },
+                      { label: 'Date',         value: formatDate(selectedConcert.date) },
+                      { label: 'Capacity',     value: formatNumber(selectedConcert.capacity) },
+                      { label: 'Tickets Sold', value: formatNumber(selectedConcert.ticketsSold) },
+                      { label: 'ATP',          value: formatCurrency(selectedConcert.avgTicketPrice, { country: selectedConcert.country }) },
+                      { label: 'Revenue',      value: formatCurrency(selectedConcert.totalRevenue, { country: selectedConcert.country }) },
+                      { label: 'Sell-Through', value: (selectedConcert.capacity > 0 ? ((selectedConcert.ticketsSold / selectedConcert.capacity) * 100).toFixed(1) : '0.0') + '%' },
                 ].map((item, i) => (
                   <div key={i} className="rounded-xl p-2" style={{ background: 'var(--bg-secondary)' }}>
                     <p className="text-xs" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{item.label}</p>
@@ -197,13 +197,13 @@ function MapView() {
                       <p className="text-xs font-bold" style={{ color: 'var(--text-primary)' }}>{concert.artist}</p>
                       <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{concert.city}</p>
                     </div>
-                    <span className="w-2.5 h-2.5 rounded-full mt-0.5 flex-shrink-0"
-                      style={{ background: getColor(concert.tickets_sold, concert.capacity) }} />
+                      <span className="w-2.5 h-2.5 rounded-full mt-0.5 flex-shrink-0"
+                      style={{ background: getColor(concert.ticketsSold, concert.capacity) }} />
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(concert.date)}</span>
                     <span className="text-xs font-bold font-display" style={{ color: 'var(--accent-gold)' }}>
-                      {formatCurrency(concert.total_revenue)}
+                      {formatCurrency(concert.totalRevenue, { country: concert.country })}
                     </span>
                   </div>
                 </div>

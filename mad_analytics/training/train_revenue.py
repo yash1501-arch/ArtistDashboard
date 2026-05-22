@@ -399,8 +399,8 @@ def main():
 
     model_store.save("revenue_model", model)
     model_store.save("revenue_preprocessor", preprocessor)
-    print(f"\n✓ Saved -> {model_store.MODELS_DIR / 'revenue_model.joblib'}")
-    print(f"✓ Saved -> {model_store.MODELS_DIR / 'revenue_preprocessor.joblib'}")
+    print(f"\n[OK] Saved -> {model_store.MODELS_DIR / 'revenue_model.joblib'}")
+    print(f"[OK] Saved -> {model_store.MODELS_DIR / 'revenue_preprocessor.joblib'}")
     print(f"\nModel is now active. The revenue predictor will use it for inference.")
 
 
