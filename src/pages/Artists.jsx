@@ -223,7 +223,7 @@ function ArtistCard({ artist, onClick, delay = 0 }) {
       </div>
 
       {/* Platform breakdown */}
-      <div className="grid grid-cols-5 gap-1.5 mb-3">
+      <div className="grid grid-cols-4 gap-1.5 mb-3">
         {Object.entries(followers).map(([platform, count]) => {
           const meta = PLATFORM_META[platform]
           if (!meta) return null

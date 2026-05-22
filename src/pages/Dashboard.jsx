@@ -132,6 +132,22 @@ function Dashboard() {
     return Object.values(grouped).sort((a, b) => b.revenue - a.revenue)
   }, [filteredConcerts])
 
+  // Normalize chart data coming from backend so charts receive numeric values
+  const ageChartData = useMemo(() => (ageData || []).map(d => ({
+    name: d.name ?? d.label ?? d.age ?? 'Unknown',
+    value: Number(d.value ?? d.count ?? d.percentage ?? 0)
+  })), [ageData])
+
+  const genderChartData = useMemo(() => (genderData || []).map(d => ({
+    name: d.name ?? d.label ?? d.gender ?? 'Unknown',
+    value: Number(d.value ?? d.count ?? d.percentage ?? 0)
+  })), [genderData])
+
+  const genreChartData = useMemo(() => (genreData || []).map(d => ({
+    genre: d.genre ?? d.name ?? 'Unknown',
+    streams: Number(d.streams ?? d.value ?? d.count ?? 0)
+  })), [genreData])
+
   const KPI_CONFIG = [
     {
       title: 'Total Artists',
@@ -237,7 +253,9 @@ function Dashboard() {
               </span>
             ))}
           </div>
-          <LineChart data={safeTrends} xKey="date" lines={TREND_LINES} height={260} />
+          <LineChart data={safeTrends} xKey="date" lines={TREND_LINES} height={260}
+            margin={{ top: 10, right: 48, left: 48, bottom: 10 }}
+            yDomain={[1000000, 450000000]} />
         </ChartContainer>
 
         {/* Top 10 Artists */}
@@ -355,17 +373,18 @@ function Dashboard() {
             bars={[{ key: 'revenue', label: 'Revenue', color: '#818CF8' }]} height={240} />
         </ChartContainer>
         <ChartContainer title="Audience Age Distribution" subtitle="% of total audience" delay={230}>
-          <PieChart data={ageData || []} nameKey="name" valueKey="value" innerRadius={55} height={240} />
+          <PieChart data={ageChartData} nameKey="name" valueKey="value" innerRadius={55} height={240} />
         </ChartContainer>
         <ChartContainer title="Gender Distribution" subtitle="% of total audience" delay={310}>
-          <PieChart data={genderData || []} nameKey="name" valueKey="value" innerRadius={55} height={240} />
+          <PieChart data={genderChartData} nameKey="name" valueKey="value" innerRadius={55} height={240} />
         </ChartContainer>
+    
       </div>
 
       {/* ── Row 3: Genre + Recent Concerts ── */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ChartContainer title="Genre Popularity" subtitle="Total streams by music genre" delay={200}>
-          <BarChart data={genreData || []} xKey="genre" layout="vertical"
+          <BarChart data={genreChartData} xKey="genre" layout="vertical"
             bars={[{ key: 'streams', label: 'Streams' }]} multiColor={true} height={260} />
         </ChartContainer>
 
@@ -388,7 +407,7 @@ function Dashboard() {
             </span> */}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 overflow-y-auto pr-2" style={{ maxHeight: '260px' }}>
             {filteredConcerts.length === 0 ? (
               <p className="text-sm text-center py-8" style={{ color: 'var(--text-muted)' }}>
                 No concerts found for selected market

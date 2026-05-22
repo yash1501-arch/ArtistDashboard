@@ -23,14 +23,14 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
-function LineChart({ data = [], lines = [], xKey = 'date', height = 280 }) {
+function LineChart({ data = [], lines = [], xKey = 'date', height = 280, margin = { top: 5, right: 10, left: 0, bottom: 5 }, yDomain, yTickFormatter }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <ReLineChart data={data} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+      <ReLineChart data={data} margin={margin}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
         <XAxis dataKey={xKey} tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'Satoshi' }}
           axisLine={false} tickLine={false} />
-        <YAxis tickFormatter={formatNumber} tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'Satoshi' }}
+        <YAxis domain={yDomain} tickFormatter={yTickFormatter || formatNumber} tick={{ fontSize: 11, fill: 'var(--text-muted)', fontFamily: 'Satoshi' }}
           axisLine={false} tickLine={false} width={48} />
         <Tooltip content={<CustomTooltip />} />
         <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '12px', fontFamily: 'Satoshi', color: 'var(--text-secondary)' }} />
