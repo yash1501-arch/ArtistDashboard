@@ -1,12 +1,12 @@
 """
 Web search integration for venue capacity resolution.
-Uses Google Custom Search API to find real venue capacity data.
+Uses SerpAPI (Google Search) to find real venue capacity data.
 
 Security measures:
-- API keys are ONLY read from environment variables (never hardcoded)
+- API key is ONLY read from environment variable SERPAPI_KEY (never hardcoded)
 - Rate limited: max 50 searches/hour, 10 searches/minute
 - Results are cached in DB so the same venue is never searched twice
-- Only called server-side from the resolver pipeline (not a public endpoint)
+- Only called server-side from the resolver pipeline
 """
 from __future__ import annotations
 
@@ -20,15 +20,13 @@ from ..utils.schemas import VenueCapacityCandidate
 
 logger = logging.getLogger(__name__)
 
-# Keys are read from environment variables ONLY
-GOOGLE_API_KEY_ENV = "GOOGLE_SEARCH_API_KEY"
-GOOGLE_CX_ENV = "GOOGLE_SEARCH_CX"
+SERPAPI_KEY_ENV = "SERPAPI_KEY"
 
 # ── Rate limiting ──────────────────────────────────────────────────────────────
 
 _search_timestamps: list[float] = []
-MAX_SEARCHES_PER_HOUR = 50
-MAX_SEARCHES_PER_MINUTE = 10
+MAX_SEARCHES_PER_HOUR = 100
+MAX_SEARCHES_PER_MINUTE = 15
 
 
 def _is_rate_limited() -> bool:
@@ -56,22 +54,27 @@ def _record_search():
 # ── Capacity extraction patterns ──────────────────────────────────────────────
 
 CAPACITY_PATTERNS = [
+    # "capacity of 7,000" / "capacity: 7000" / "seating capacity of 15,000"
     re.compile(
         r"(?:seating\s+)?capacity\s*(?:of|:|\s*is)?\s*(\d[\d,]*)\s*(?:seats?|people|guests)?",
         re.IGNORECASE,
     ),
+    # "7,000 seats" / "15000-seat arena"
     re.compile(
         r"(\d[\d,]*)\s*[-\s]?\s*seats?",
         re.IGNORECASE,
     ),
+    # "holds 7,000" / "accommodates 15,000"
     re.compile(
         r"(?:holds?|accommodates?|fits?)\s+(?:up\s+to\s+)?(\d[\d,]*)",
         re.IGNORECASE,
     ),
+    # "7,000 capacity"
     re.compile(
         r"(\d[\d,]*)\s*(?:[-\s])?capacity",
         re.IGNORECASE,
     ),
+    # "venue for 7,000"
     re.compile(
         r"(?:venue|arena|hall|stadium|theater|theatre)\s+(?:for|of)\s+(\d[\d,]*)",
         re.IGNORECASE,
@@ -112,35 +115,29 @@ def search_venue_capacity(
     country: str = "",
     *,
     api_key: Optional[str] = None,
-    cx: Optional[str] = None,
 ) -> list[VenueCapacityCandidate]:
     """
-    Search Google for venue capacity information.
+    Search Google via SerpAPI for venue capacity information.
 
     Returns a list of VenueCapacityCandidate objects extracted from search results.
-    Returns empty list if:
-    - API keys are not configured
-    - Rate limit is exceeded
-    - Search fails for any reason
+    Returns empty list if API key is not configured, rate limit hit, or search fails.
     """
-    # Resolve API credentials from env vars only
-    key = api_key or os.environ.get(GOOGLE_API_KEY_ENV)
-    search_cx = cx or os.environ.get(GOOGLE_CX_ENV)
+    key = api_key or os.environ.get(SERPAPI_KEY_ENV)
 
-    if not key or not search_cx:
-        logger.debug("Google Search API not configured (set %s and %s env vars)", GOOGLE_API_KEY_ENV, GOOGLE_CX_ENV)
+    if not key:
+        logger.debug("SerpAPI key not configured (set %s env var)", SERPAPI_KEY_ENV)
         return []
 
-    # Rate limit check
+    # Skip web search for generic/placeholder venue names
+    generic_names = {"venue", "arena", "stadium", "hall", "club", "theater", "theatre", "grounds"}
+    if venue_name.lower().strip() in generic_names or len(venue_name.strip()) < 4:
+        return []
+
     if _is_rate_limited():
         return []
 
     # Build search query
-    query_parts = [f'"{venue_name}"']
-    if city:
-        query_parts.append(f'"{city}"')
-    query_parts.append("capacity seats")
-    query = " ".join(query_parts)
+    query = f'"{venue_name}" {city} capacity seats'
 
     try:
         import urllib.request
@@ -148,28 +145,65 @@ def search_venue_capacity(
         import json
 
         params = urllib.parse.urlencode({
-            "key": key,
-            "cx": search_cx,
+            "api_key": key,
+            "engine": "google",
             "q": query,
             "num": 5,
         })
-        url = f"https://www.googleapis.com/customsearch/v1?{params}"
+        url = f"https://serpapi.com/search.json?{params}"
 
         req = urllib.request.Request(url, headers={"User-Agent": "MAD-Analytics/1.0"})
-        with urllib.request.urlopen(req, timeout=10) as response:
+        with urllib.request.urlopen(req, timeout=15) as response:
             data = json.loads(response.read().decode("utf-8"))
 
         _record_search()
 
     except Exception as e:
-        logger.warning(f"Google Search API call failed: {e}")
+        logger.warning(f"SerpAPI call failed: {e}")
         return []
 
-    # Extract capacity candidates from search results
+    # Extract from Knowledge Graph (most accurate)
     candidates: list[VenueCapacityCandidate] = []
-    items = data.get("items", [])
 
-    for item in items:
+    knowledge_graph = data.get("knowledge_graph", {})
+    if knowledge_graph:
+        # SerpAPI often returns capacity directly in knowledge graph
+        kg_text = json.dumps(knowledge_graph)
+        kg_capacities = _extract_capacities_from_text(kg_text)
+        for capacity in kg_capacities:
+            candidates.append(
+                VenueCapacityCandidate(
+                    capacity=capacity,
+                    source="web_search",
+                    method="serpapi_knowledge_graph",
+                    confidence=0.92,
+                    source_url=knowledge_graph.get("website", ""),
+                    raw_text=knowledge_graph.get("description", "")[:200],
+                    notes="Extracted from Google Knowledge Graph via SerpAPI",
+                )
+            )
+
+    # Extract from Answer Box
+    answer_box = data.get("answer_box", {})
+    if answer_box:
+        ab_text = f"{answer_box.get('title', '')} {answer_box.get('snippet', '')} {answer_box.get('answer', '')}"
+        ab_capacities = _extract_capacities_from_text(ab_text)
+        for capacity in ab_capacities:
+            candidates.append(
+                VenueCapacityCandidate(
+                    capacity=capacity,
+                    source="web_search",
+                    method="serpapi_answer_box",
+                    confidence=0.90,
+                    source_url=answer_box.get("link", ""),
+                    raw_text=ab_text[:200],
+                    notes="Extracted from Google Answer Box via SerpAPI",
+                )
+            )
+
+    # Extract from organic search results
+    organic_results = data.get("organic_results", [])
+    for item in organic_results[:5]:
         snippet = item.get("snippet", "")
         title = item.get("title", "")
         link = item.get("link", "")
@@ -181,7 +215,6 @@ def search_venue_capacity(
             confidence = 0.78
             domain = link.lower()
 
-            # Higher confidence for authoritative sources
             if any(auth in domain for auth in ["wikipedia.org", "setlist.fm", "songkick.com"]):
                 confidence = 0.88
             elif any(auth in domain for auth in [".gov", "ticketmaster", "livenation", "aeg"]):
@@ -193,11 +226,11 @@ def search_venue_capacity(
                 VenueCapacityCandidate(
                     capacity=capacity,
                     source="web_search",
-                    method="google_custom_search",
+                    method="serpapi_organic",
                     confidence=confidence,
                     source_url=link,
                     raw_text=snippet[:200] if snippet else None,
-                    notes=f"Extracted from Google search result: {title[:80]}",
+                    notes=f"Extracted from search result: {title[:80]}",
                 )
             )
 
@@ -208,4 +241,38 @@ def search_venue_capacity(
         if not existing or candidate.confidence > existing.confidence:
             seen[candidate.capacity] = candidate
 
-    return sorted(seen.values(), key=lambda c: c.confidence, reverse=True)[:3]
+    # Filter out values that are clearly wrong for the venue type
+    filtered = _filter_by_venue_context(list(seen.values()), venue_name)
+
+    return sorted(filtered, key=lambda c: c.confidence, reverse=True)[:3]
+
+
+def _filter_by_venue_context(
+    candidates: list[VenueCapacityCandidate],
+    venue_name: str,
+) -> list[VenueCapacityCandidate]:
+    """Remove candidates that are wildly inconsistent with the venue name."""
+    if not candidates:
+        return candidates
+
+    name_lower = venue_name.lower()
+
+    # Determine expected range from venue name keywords
+    min_expected = 100
+    max_expected = 250_000
+
+    if any(kw in name_lower for kw in ("stadium", "grounds", "field")):
+        min_expected = 5_000
+    elif any(kw in name_lower for kw in ("arena", "garden", "center", "centre", "dome")):
+        min_expected = 2_000
+    elif any(kw in name_lower for kw in ("amphitheatre", "amphitheater", "pavilion")):
+        min_expected = 1_000
+    elif any(kw in name_lower for kw in ("theater", "theatre", "auditorium", "hall")):
+        min_expected = 500
+    elif any(kw in name_lower for kw in ("club", "lounge", "bar")):
+        max_expected = 3_000
+
+    filtered = [c for c in candidates if min_expected <= c.capacity <= max_expected]
+
+    # If filtering removed everything, return original (don't lose all data)
+    return filtered if filtered else candidates

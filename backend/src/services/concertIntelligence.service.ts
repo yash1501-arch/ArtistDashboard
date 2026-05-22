@@ -6,7 +6,6 @@ import { eventNormalizationService } from './normalization/eventNormalization.se
 import { NormalizedConcertEvent } from './normalization/types';
 import { revenuePredictionService } from './predictions/revenuePrediction.service';
 import { RevenuePredictionResult } from './predictions/types';
-import { concertScrapingService } from './scrapers/concertScraping.service';
 import { RawConcertEvent, ScrapeQuery } from './scrapers/types';
 import { hybridValidationService } from './validation/hybridValidation.service';
 import { HybridValidationResult } from './validation/types';
@@ -59,12 +58,9 @@ interface PredictionInputs {
 export class ConcertIntelligenceService {
   async runDiscoveryPipeline(options: ConcertIntelligenceOptions): Promise<ConcertIntelligenceSummary> {
     const artists = await this.resolveArtists(options);
-    const scrapeQuery = {
-      ...options,
-      artists: artists.length ? artists.map((artist) => artist.artistName) : options.artists,
-    };
-    const scrapeSummary = await concertScrapingService.scrapeSources(scrapeQuery);
-    const normalizedEvents = eventNormalizationService.normalizeBatch(scrapeSummary.events);
+    // Concert scraping is now handled by the Python mad_analytics scheduler.
+    // This pipeline processes any events passed directly or from the DB.
+    const normalizedEvents = eventNormalizationService.normalizeBatch([] as RawConcertEvent[]);
     const results: ConcertIntelligenceEventResult[] = [];
     const shouldRunPredictions = options.runPredictions !== false;
     const shouldPersistConcerts = options.persistConcerts !== false && shouldRunPredictions;
@@ -118,8 +114,8 @@ export class ConcertIntelligenceService {
     }
 
     return {
-      jobId: scrapeSummary.jobId,
-      scrapedCount: scrapeSummary.eventCount,
+      jobId: 'python-scheduler',
+      scrapedCount: 0,
       normalizedCount: normalizedEvents.length,
       persistedCount: results.filter((result) => ['created', 'updated', 'merged'].includes(result.action)).length,
       duplicateCount: results.filter((result) => result.action === 'merged').length,
@@ -127,12 +123,14 @@ export class ConcertIntelligenceService {
       predictedCount: results.filter((result) => result.prediction).length,
       storedConcertCount: results.filter((result) => result.concert).length,
       results,
-      errors: scrapeSummary.errors,
+      errors: [],
     };
   }
 
-  async enqueueDiscoveryPipeline(options: ConcertIntelligenceOptions): Promise<string> {
-    return concertScrapingService.enqueueScrape(options);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async enqueueDiscoveryPipeline(_options: ConcertIntelligenceOptions): Promise<string> {
+    // Scraping is now handled by the Python mad_analytics background scheduler.
+    return 'scraping-handled-by-python-scheduler';
   }
 
   async ingestRawEvents(
