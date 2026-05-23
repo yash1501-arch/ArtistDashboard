@@ -495,6 +495,20 @@ def resolve_venue_capacity(payload: VenueCapacityInput) -> VenueCapacityOutput:
     candidates: list[VenueCapacityCandidate] = []
     db_url = _resolve_db_url(payload.db_url)
 
+    # Priority 0: Check curated known venues database (most reliable)
+    from .known_venues import lookup_known_capacity
+    known_cap = lookup_known_capacity(payload.venue_name, payload.city)
+    if known_cap:
+        candidates.append(
+            VenueCapacityCandidate(
+                capacity=known_cap,
+                source="known_venues_db",
+                method="curated_lookup",
+                confidence=0.98,
+                notes=f"Verified capacity from curated venue database",
+            )
+        )
+
     if payload.supplied_capacity:
         candidates.append(
             VenueCapacityCandidate(

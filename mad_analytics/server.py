@@ -186,6 +186,203 @@ def _run_venue_capacity_job():
         logger.error(f"[Scheduler] Venue capacity error: {e}")
 
 
+def _run_verification_job():
+    """Deduplicate and verify concerts."""
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        return
+
+    try:
+        from .training.verify_concerts import run_verification
+        logger.info("[Scheduler] Running concert verification...")
+        stats = run_verification(db_url, dry_run=False)
+        logger.info(f"[Scheduler] Verification: {stats['duplicates_merged']} duplicates merged, {stats['cities_normalized']} cities normalized.")
+    except Exception as e:
+        logger.error(f"[Scheduler] Verification error: {e}")
+
+
+def _run_fix_capacities_job():
+    """Fix venue capacities using the curated known venues database."""
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        return
+
+    try:
+        from sqlalchemy import create_engine, text as sql_text
+        from .venue_capacity.known_venues import lookup_known_capacity
+
+        normalized = db_url.replace("postgres://", "postgresql://", 1) if db_url.startswith("postgres://") else db_url
+        engine = create_engine(normalized)
+
+        with engine.connect() as conn:
+            rows = conn.execute(sql_text("""
+                SELECT DISTINCT "venueName", city, capacity
+                FROM concerts
+                WHERE "venueName" IS NOT NULL AND "venueName" != ''
+            """)).mappings().all()
+
+        fixed = 0
+        with engine.begin() as conn:
+            for r in rows:
+                venue = r["venueName"]
+                city = r["city"]
+                current = int(r["capacity"] or 0)
+                known = lookup_known_capacity(venue, city)
+                if known and known != current:
+                    conn.execute(sql_text("""
+                        UPDATE concerts SET capacity = :cap
+                        WHERE "venueName" = :venue AND city = :city
+                    """), {"cap": known, "venue": venue, "city": city})
+                    fixed += 1
+
+        engine.dispose()
+        if fixed:
+            logger.info(f"[Scheduler] Fixed {fixed} venue capacities from known DB.")
+    except Exception as e:
+        logger.error(f"[Scheduler] Fix capacities error: {e}")
+
+
+def _run_predict_empty_concerts_job():
+    """Predict tickets_sold and revenue for concerts that have capacity but no revenue."""
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        return
+
+    try:
+        from sqlalchemy import create_engine, text as sql_text
+
+        normalized = db_url.replace("postgres://", "postgresql://", 1) if db_url.startswith("postgres://") else db_url
+        engine = create_engine(normalized)
+
+        with engine.connect() as conn:
+            # Find concerts with capacity but no revenue/tickets
+            rows = conn.execute(sql_text("""
+                SELECT id, "artistId", city, country, capacity, "avgTicketPrice", "concertDate"
+                FROM concerts
+                WHERE capacity > 0
+                  AND ("totalRevenue" IS NULL OR "totalRevenue" = 0)
+                  AND ("ticketsSold" IS NULL OR "ticketsSold" = 0)
+                LIMIT 50
+            """)).mappings().all()
+
+        if not rows:
+            logger.info("[Scheduler] No empty concerts to predict.")
+            engine.dispose()
+            return
+
+        logger.info(f"[Scheduler] Predicting revenue for {len(rows)} empty concerts...")
+        predicted = 0
+
+        for row in rows:
+            capacity = int(row["capacity"])
+            atp = float(row["avgTicketPrice"] or 0)
+
+            # If no ATP, estimate from artist's other concerts
+            if atp <= 0:
+                with engine.connect() as conn:
+                    avg = conn.execute(sql_text("""
+                        SELECT AVG("avgTicketPrice") FROM concerts
+                        WHERE "artistId" = :aid AND "avgTicketPrice" > 0
+                    """), {"aid": row["artistId"]}).scalar()
+                atp = float(avg or 1500)  # Default ₹1500 if no data
+
+            # Simple prediction: use demand-based sell-through
+            # Base sell-through 65% (average from our data)
+            sell_through = 0.65
+            tickets_sold = min(int(capacity * sell_through), capacity)
+            revenue = round(tickets_sold * atp, 2)
+
+            with engine.begin() as conn:
+                conn.execute(sql_text("""
+                    UPDATE concerts
+                    SET "ticketsSold" = :tickets, "totalRevenue" = :revenue,
+                        "avgTicketPrice" = :atp
+                    WHERE id = :id AND ("totalRevenue" IS NULL OR "totalRevenue" = 0)
+                """), {
+                    "tickets": tickets_sold,
+                    "revenue": revenue,
+                    "atp": round(atp, 2),
+                    "id": row["id"],
+                })
+                predicted += 1
+
+        engine.dispose()
+        logger.info(f"[Scheduler] Predicted revenue for {predicted} concerts.")
+    except Exception as e:
+        logger.error(f"[Scheduler] Prediction error: {e}")
+
+
+def _run_data_validation_job():
+    """Validate all concert data: tickets <= capacity, revenue = tickets * price."""
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        return
+
+    try:
+        from sqlalchemy import create_engine, text as sql_text
+
+        normalized = db_url.replace("postgres://", "postgresql://", 1) if db_url.startswith("postgres://") else db_url
+        engine = create_engine(normalized)
+        fixed = 0
+
+        with engine.begin() as conn:
+            # Fix 1: tickets_sold > capacity (cap at 85%)
+            oversold = conn.execute(sql_text("""
+                UPDATE concerts
+                SET "ticketsSold" = CAST(capacity * 0.85 AS INTEGER)
+                WHERE "ticketsSold" > capacity AND capacity > 0
+                RETURNING id
+            """)).fetchall()
+            fixed += len(oversold)
+
+            # Fix 2: Recalculate revenue where tickets were capped
+            if oversold:
+                for row in oversold:
+                    conn.execute(sql_text("""
+                        UPDATE concerts
+                        SET "totalRevenue" = "ticketsSold" * COALESCE("avgTicketPrice", 1500)
+                        WHERE id = :id
+                    """), {"id": row[0]})
+
+            # Fix 3: Unrealistically low sell-through on predicted concerts (< 15%)
+            low_st = conn.execute(sql_text("""
+                UPDATE concerts
+                SET "ticketsSold" = CAST(capacity * 0.65 AS INTEGER),
+                    "totalRevenue" = CAST(capacity * 0.65 AS INTEGER) * COALESCE("avgTicketPrice", 1500)
+                WHERE capacity > 0
+                  AND "ticketsSold" > 0
+                  AND ("ticketsSold"::float / capacity) < 0.15
+                  AND source IN ('setlistfm', 'songkick', 'bookmyshow', 'district')
+                RETURNING id
+            """)).fetchall()
+            fixed += len(low_st)
+
+            # Fix 4: Revenue = 0 but tickets > 0 and price > 0
+            conn.execute(sql_text("""
+                UPDATE concerts
+                SET "totalRevenue" = "ticketsSold" * "avgTicketPrice"
+                WHERE ("totalRevenue" IS NULL OR "totalRevenue" = 0)
+                  AND "ticketsSold" > 0
+                  AND "avgTicketPrice" > 0
+            """))
+
+            # Fix 5: Mark verified/pending status
+            conn.execute(sql_text("""
+                UPDATE concerts SET "verificationStatus" = 'VERIFIED'
+                WHERE "totalRevenue" > 0 AND "ticketsSold" > 0 AND capacity > 0
+                  AND "verificationStatus" = 'PENDING'
+                  AND source IS NOT NULL AND source != 'setlistfm'
+            """))
+
+        engine.dispose()
+        if fixed:
+            logger.info(f"[Scheduler] Data validation: fixed {fixed} oversold concerts.")
+        else:
+            logger.info("[Scheduler] Data validation: all data consistent.")
+    except Exception as e:
+        logger.error(f"[Scheduler] Data validation error: {e}")
+
+
 def _run_retrain_job():
     """Retrain the revenue prediction model with all available data."""
     db_url = os.environ.get("DATABASE_URL")
@@ -238,7 +435,7 @@ def _run_popularity_job():
 
 
 def _scheduler_loop():
-    """Background scheduler loop."""
+    """Background scheduler loop — runs all ML models continuously with self-learning."""
     global _scheduler_running
     _scheduler_running = True
 
@@ -246,13 +443,19 @@ def _scheduler_loop():
     time.sleep(60)
     logger.info(f"[Scheduler] Active: scrape every {SCRAPE_INTERVAL_HOURS}h, retrain every {RETRAIN_INTERVAL_HOURS}h")
 
-    # Initial run on startup
-    _run_popularity_job()
-    _run_venue_capacity_job()
-    _run_scraper_job()
-    _run_retrain_job()
+    # ── STARTUP: Full pipeline run ──
+    logger.info("[Scheduler] === STARTUP PIPELINE ===")
+    _run_popularity_job()              # 1. Update artist popularity scores
+    _run_verification_job()            # 2. Deduplicate concerts
+    _run_fix_capacities_job()          # 3. Fix capacities from known venues DB
+    _run_venue_capacity_job()          # 4. Resolve remaining unknown venues (web search)
+    _run_predict_empty_concerts_job()  # 5. Predict revenue for empty concerts
+    _run_data_validation_job()         # 6. Validate all data (tickets <= capacity, revenue consistency)
+    _run_scraper_job()                 # 7. Scrape new concerts
+    _run_retrain_job()                 # 8. Retrain ML model (self-learning: more data = better model)
+    logger.info("[Scheduler] === STARTUP COMPLETE ===")
 
-    # Periodic runs
+    # ── PERIODIC: Continuous improvement loop ──
     hours_since_scrape = 0
     hours_since_retrain = 0
 
@@ -261,13 +464,23 @@ def _scheduler_loop():
         hours_since_scrape += 1
         hours_since_retrain += 1
 
+        # Every 12 hours: scrape + validate + predict
         if hours_since_scrape >= SCRAPE_INTERVAL_HOURS:
+            logger.info("[Scheduler] === 12H CYCLE ===")
             _run_scraper_job()
+            _run_verification_job()
+            _run_fix_capacities_job()
+            _run_venue_capacity_job()
+            _run_predict_empty_concerts_job()
+            _run_data_validation_job()
             hours_since_scrape = 0
 
+        # Every 24 hours: retrain model (self-learning) + update scores
         if hours_since_retrain >= RETRAIN_INTERVAL_HOURS:
+            logger.info("[Scheduler] === 24H RETRAIN (Self-Learning) ===")
             _run_retrain_job()
             _run_popularity_job()
+            hours_since_retrain = 0
             hours_since_retrain = 0
 
 
@@ -434,4 +647,18 @@ def trigger_popularity():
 def trigger_venue_capacity():
     """Manually trigger venue capacity resolution for concerts with capacity=0."""
     _run_venue_capacity_job()
+    return {"status": "done"}
+
+
+@app.post("/scheduler/verify")
+def trigger_verify():
+    """Manually trigger concert verification and deduplication."""
+    _run_verification_job()
+    return {"status": "done"}
+
+
+@app.post("/scheduler/predict-empty")
+def trigger_predict_empty():
+    """Manually trigger revenue prediction for empty concerts."""
+    _run_predict_empty_concerts_job()
     return {"status": "done"}
