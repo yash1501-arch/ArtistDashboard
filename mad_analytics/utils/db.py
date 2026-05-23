@@ -36,7 +36,7 @@ def fetch_artist_snapshots(db_url: Optional[str] = None) -> list[dict[str, objec
         SELECT id AS artist_id, "artistName",
                "spotifyMonthlyListeners", "youtubeSubscribers",
                "instagramFollowers", "facebookFollowers",
-               "twitterFollowers", "appleMusicListeners"
+               "twitterFollowers"
         FROM artists
         WHERE active = true
         """

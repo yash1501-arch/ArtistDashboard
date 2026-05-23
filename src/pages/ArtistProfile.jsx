@@ -169,10 +169,10 @@ function ArtistProfile() {
   })
 
   const followers = {
-    instagram: followerMap.get('instagram') || 0,
-    youtube: followerMap.get('youtube') || 0,
-    spotify: followerMap.get('spotify') || 0,
-    facebook: followerMap.get('facebook') || 0,
+    instagram: followerMap.get('instagram') || Number(artist.instagramFollowers) || 0,
+    youtube: followerMap.get('youtube') || Number(artist.youtubeSubscribers) || 0,
+    spotify: followerMap.get('spotify') || Number(artist.spotifyMonthlyListeners) || 0,
+    facebook: followerMap.get('facebook') || Number(artist.facebookFollowers) || 0,
     applemusic: followerMap.get('applemusic') || 0,
   }
 

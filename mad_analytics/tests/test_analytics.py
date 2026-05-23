@@ -307,7 +307,6 @@ class TestArtistPopularity:
                 "instagramFollowers": 80000,
                 "facebookFollowers": 20000,
                 "twitterFollowers": 15000,
-                "appleMusicListeners": 25000,
             },
             {
                 "artist_id": "artist_002",
@@ -317,7 +316,6 @@ class TestArtistPopularity:
                 "instagramFollowers": 40000,
                 "facebookFollowers": 10000,
                 "twitterFollowers": 5000,
-                "appleMusicListeners": 12000,
             },
         ]
         monkeypatch.setattr(popularity_calculator, "fetch_artist_snapshots", lambda: snapshot_rows)
@@ -340,7 +338,6 @@ class TestArtistPopularity:
                 "instagramFollowers": 80000,
                 "facebookFollowers": 20000,
                 "twitterFollowers": 15000,
-                "appleMusicListeners": 25000,
             },
             {
                 "artist_id": "artist_002",
@@ -350,7 +347,6 @@ class TestArtistPopularity:
                 "instagramFollowers": 40000,
                 "facebookFollowers": 10000,
                 "twitterFollowers": 5000,
-                "appleMusicListeners": 12000,
             },
         ]
         monkeypatch.setattr(popularity_calculator, "fetch_artist_snapshots", lambda: snapshot_rows)

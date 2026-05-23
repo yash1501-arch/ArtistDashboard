@@ -15,7 +15,6 @@ SNAPSHOT_PLATFORMS = [
     "instagramFollowers",
     "facebookFollowers",
     "twitterFollowers",
-    "appleMusicListeners",
 ]
 
 PLATFORM_LABELS = {
@@ -24,7 +23,6 @@ PLATFORM_LABELS = {
     "instagramFollowers": "instagram",
     "facebookFollowers": "facebook",
     "twitterFollowers": "twitter",
-    "appleMusicListeners": "apple_music",
 }
 
 

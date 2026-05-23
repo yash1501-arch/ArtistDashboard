@@ -19,19 +19,19 @@ model Artist {
   photoUrl                String?
   wikiUrl                 String?
   active                  Boolean               @default(true)
-  instagramUrl            String?
-  facebookUrl             String?
-  twitterUrl              String?
-  spotifyUrl              String?
-  youtubeUrl              String?
-  appleMusicUrl           String?
   instagramFollowers      BigInt?
   facebookFollowers       BigInt?
   twitterFollowers        BigInt?
   spotifyMonthlyListeners BigInt?
   youtubeSubscribers      BigInt?
-  appleMusicListeners     BigInt?
   popularity              Decimal?              @db.Decimal(5, 2)
+  imageUrl                String?
+  spotifyFollowers        BigInt?
+  topCity1                String?
+  topCity2                String?
+  topCity3                String?
+  topCity4                String?
+  topCity5                String?
   lastUpdated             DateTime?
   created_at              DateTime              @default(now())
   updated_at              DateTime              @updatedAt
@@ -145,6 +145,8 @@ model Concert {
   ticketPriceTier1     Decimal?                  @db.Decimal(10, 2)
   ticketPriceTier2     Decimal?                  @db.Decimal(10, 2)
   ticketPriceTier3     Decimal?                  @db.Decimal(10, 2)
+  ticketPriceMin       Decimal?                  @db.Decimal(10, 2)
+  ticketPriceMax       Decimal?                  @db.Decimal(10, 2)
   artistCityPopularity Decimal?                  @db.Decimal(5, 2)
   demandScore          Decimal?                  @db.Decimal(5, 2)
   audienceDemographics AudienceDemographic[]

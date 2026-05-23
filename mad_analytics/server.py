@@ -62,27 +62,128 @@ _scheduler_running = False
 
 
 def _run_scraper_job():
-    """Scrape concerts from BookMyShow + District and store in DB."""
+    """Scrape concerts from BookMyShow + District + Setlist.fm + Songkick and store in DB."""
     db_url = os.environ.get("DATABASE_URL")
-    if not db_url or not os.environ.get("SERPAPI_KEY"):
-        logger.info("[Scheduler] Skipping scrape (DATABASE_URL or SERPAPI_KEY not set)")
+    if not db_url:
+        logger.info("[Scheduler] Skipping scrape (DATABASE_URL not set)")
         return 0
 
     try:
-        from .scrapers.bookmyshow import scrape_bookmyshow
-        from .scrapers.district import scrape_district
         from .scrapers.run_scraper import store_concerts
+        from .scrapers.models import ScrapedConcert
 
-        logger.info("[Scheduler] Running concert scraper...")
-        bms = scrape_bookmyshow()
-        dist = scrape_district()
-        all_concerts = bms + dist
+        all_concerts = []
+
+        # Scrape sources that need SerpAPI
+        if os.environ.get("SERPAPI_KEY"):
+            from .scrapers.bookmyshow import scrape_bookmyshow
+            from .scrapers.district import scrape_district
+            from .scrapers.songkick import scrape_songkick
+
+            logger.info("[Scheduler] Running BMS + District + Songkick scrapers...")
+            all_concerts.extend(scrape_bookmyshow())
+            all_concerts.extend(scrape_district())
+
+            # Get tracked artists for artist-based scrapers
+            from sqlalchemy import create_engine, text as sql_text
+            normalized = db_url.replace("postgres://", "postgresql://", 1) if db_url.startswith("postgres://") else db_url
+            engine = create_engine(normalized)
+            with engine.connect() as conn:
+                artists = [dict(r) for r in conn.execute(sql_text('SELECT id, "artistName" FROM artists WHERE active = true')).mappings().all()]
+            engine.dispose()
+
+            all_concerts.extend(scrape_songkick(artists))
+
+        # Scrape Setlist.fm (has its own API key)
+        if os.environ.get("SETLISTFM_API_KEY") or os.environ.get("SETLIST_API_KEY"):
+            from .scrapers.setlistfm import scrape_setlistfm
+            if not os.environ.get("SERPAPI_KEY"):
+                from sqlalchemy import create_engine, text as sql_text
+                normalized = db_url.replace("postgres://", "postgresql://", 1) if db_url.startswith("postgres://") else db_url
+                engine = create_engine(normalized)
+                with engine.connect() as conn:
+                    artists = [dict(r) for r in conn.execute(sql_text('SELECT id, "artistName" FROM artists WHERE active = true')).mappings().all()]
+                engine.dispose()
+            all_concerts.extend(scrape_setlistfm(artists))
+
         stored = store_concerts(all_concerts, db_url)
         logger.info(f"[Scheduler] Scrape done: {stored} new concerts from {len(all_concerts)} scraped.")
+
+        # Run venue capacity resolution for new concerts
+        _run_venue_capacity_job()
+
         return stored
     except Exception as e:
         logger.error(f"[Scheduler] Scraper error: {e}")
         return 0
+
+
+def _run_venue_capacity_job():
+    """Resolve venue capacity for concerts that have capacity=0."""
+    db_url = os.environ.get("DATABASE_URL")
+    if not db_url:
+        return
+
+    try:
+        from sqlalchemy import create_engine, text as sql_text
+        from .venue_capacity.web_search import search_venue_capacity
+        from .venue_capacity.resolver import estimate_capacity
+
+        normalized = db_url.replace("postgres://", "postgresql://", 1) if db_url.startswith("postgres://") else db_url
+        engine = create_engine(normalized)
+
+        with engine.connect() as conn:
+            # Get concerts with no capacity that have a venue name
+            rows = conn.execute(sql_text('''
+                SELECT DISTINCT "venueName", city, country
+                FROM concerts
+                WHERE (capacity = 0 OR capacity IS NULL)
+                  AND "venueName" IS NOT NULL AND "venueName" != ''
+                LIMIT 20
+            ''')).mappings().all()
+
+        if not rows:
+            logger.info("[Scheduler] No venues need capacity resolution.")
+            engine.dispose()
+            return
+
+        logger.info(f"[Scheduler] Resolving capacity for {len(rows)} venues...")
+        resolved = 0
+
+        for row in rows:
+            venue_name = row["venueName"]
+            city = row["city"]
+            country = row["country"] or ""
+
+            # Try web search first
+            capacity = None
+            if os.environ.get("SERPAPI_KEY"):
+                candidates = search_venue_capacity(venue_name, city, country)
+                plausible = [c for c in candidates if c.capacity >= 500]
+                if plausible:
+                    capacity = max(plausible, key=lambda c: (c.confidence > 0.8, c.capacity)).capacity
+
+            # Fallback to heuristic
+            if not capacity:
+                est = estimate_capacity(venue_name, city=city, country=country)
+                capacity = est.capacity
+
+            if capacity and capacity > 0:
+                with engine.begin() as conn:
+                    conn.execute(sql_text('''
+                        UPDATE concerts SET capacity = :cap
+                        WHERE "venueName" = :venue AND city = :city
+                          AND (capacity = 0 OR capacity IS NULL)
+                    '''), {"cap": capacity, "venue": venue_name, "city": city})
+                resolved += 1
+
+            import time
+            time.sleep(2)  # Rate limit for web search
+
+        engine.dispose()
+        logger.info(f"[Scheduler] Resolved capacity for {resolved}/{len(rows)} venues.")
+    except Exception as e:
+        logger.error(f"[Scheduler] Venue capacity error: {e}")
 
 
 def _run_retrain_job():
@@ -147,6 +248,7 @@ def _scheduler_loop():
 
     # Initial run on startup
     _run_popularity_job()
+    _run_venue_capacity_job()
     _run_scraper_job()
     _run_retrain_job()
 
@@ -325,4 +427,11 @@ def trigger_retrain():
 def trigger_popularity():
     """Manually trigger popularity score update."""
     _run_popularity_job()
+    return {"status": "done"}
+
+
+@app.post("/scheduler/venue-capacity")
+def trigger_venue_capacity():
+    """Manually trigger venue capacity resolution for concerts with capacity=0."""
+    _run_venue_capacity_job()
     return {"status": "done"}

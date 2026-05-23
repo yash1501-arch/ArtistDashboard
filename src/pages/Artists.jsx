@@ -209,7 +209,7 @@ function ArtistCard({ artist, onClick, delay = 0 }) {
         <div className="rounded-xl p-2 text-center"
           style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
           <p className="text-xs" style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Popularity</p>
-          <p className="font-bold text-sm" style={{ color: 'var(--accent-gold)' }}>{Number(artist.popularity || 0)}</p>
+          <p className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{Number(artist.popularity || 0)}</p>
         </div>
       </div>
 

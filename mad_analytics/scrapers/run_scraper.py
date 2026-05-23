@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from mad_analytics.scrapers.bookmyshow import scrape_bookmyshow
 from mad_analytics.scrapers.district import scrape_district
+from mad_analytics.scrapers.setlistfm import scrape_setlistfm
+from mad_analytics.scrapers.songkick import scrape_songkick
 from mad_analytics.scrapers.models import ScrapedConcert
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -144,7 +146,7 @@ def main():
     parser = argparse.ArgumentParser(description="Scrape concerts and store in database")
     parser.add_argument("--db", default=os.environ.get("DATABASE_URL", ""),
                         help="PostgreSQL connection URL")
-    parser.add_argument("--source", choices=["bookmyshow", "district", "all"], default="all",
+    parser.add_argument("--source", choices=["bookmyshow", "district", "setlistfm", "songkick", "all"], default="all",
                         help="Which source to scrape")
     parser.add_argument("--cities", default="",
                         help="Comma-separated city slugs (default: all major cities)")
@@ -190,6 +192,28 @@ def main():
         dist = scrape_district(cities)
         all_concerts.extend(dist)
         print(f"  District: {len(dist)} concerts found")
+
+    if args.source in ("setlistfm", "all"):
+        print("Scraping Setlist.fm...")
+        from sqlalchemy import create_engine, text as sql_text
+        engine = create_engine(_normalize_db_url(args.db))
+        with engine.connect() as conn:
+            artists = [dict(r) for r in conn.execute(sql_text('SELECT id, "artistName" FROM artists WHERE active = true')).mappings().all()]
+        engine.dispose()
+        setlists = scrape_setlistfm(artists)
+        all_concerts.extend(setlists)
+        print(f"  Setlist.fm: {len(setlists)} concerts found")
+
+    if args.source in ("songkick", "all"):
+        print("Scraping Songkick...")
+        from sqlalchemy import create_engine, text as sql_text
+        engine = create_engine(_normalize_db_url(args.db))
+        with engine.connect() as conn:
+            artists = [dict(r) for r in conn.execute(sql_text('SELECT id, "artistName" FROM artists WHERE active = true')).mappings().all()]
+        engine.dispose()
+        sk = scrape_songkick(artists)
+        all_concerts.extend(sk)
+        print(f"  Songkick: {len(sk)} concerts found")
 
     print(f"\nTotal scraped: {len(all_concerts)} concerts")
 
