@@ -1,6 +1,6 @@
 """
-District (by Zomato) concert scraper.
-Uses SerpAPI to search for District.in concert listings.
+District (by Zomato) scraper — searches for concerts by artist name using SerpAPI.
+Fetches concert details for artists present in the database.
 """
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ import os
 import re
 import time
 import logging
+import urllib.request
+import urllib.parse
 from datetime import datetime
 from typing import Optional
 
@@ -16,25 +18,10 @@ from .models import ScrapedConcert
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://www.district.in"
 SERPAPI_KEY_ENV = "SERPAPI_KEY"
-
-CITIES = [
-    ("mumbai", "Mumbai"),
-    ("delhi-ncr", "Delhi"),
-    ("bengaluru", "Bangalore"),
-    ("hyderabad", "Hyderabad"),
-    ("chennai", "Chennai"),
-    ("pune", "Pune"),
-    ("kolkata", "Kolkata"),
-    ("ahmedabad", "Ahmedabad"),
-    ("kochi", "Kochi"),
-    ("jaipur", "Jaipur"),
-]
 
 
 def _parse_price(text: str) -> Optional[float]:
-    """Extract price from text."""
     match = re.search(r"[₹Rs\.]+\s*([\d,]+)", text)
     if match:
         cleaned = match.group(1).replace(",", "").strip()
@@ -47,7 +34,7 @@ def _parse_price(text: str) -> Optional[float]:
 
 
 def _parse_date(text: str) -> Optional[str]:
-    """Parse date from search snippet."""
+    current_year = datetime.now().year
     patterns = [
         r"(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*[\s,]+(\d{4})",
         r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d{1,2})[\s,]+(\d{4})",
@@ -57,100 +44,126 @@ def _parse_date(text: str) -> Optional[str]:
         if match:
             groups = match.groups()
             try:
-                if len(groups[0]) <= 2:
+                if groups[0].isdigit():
                     dt = datetime.strptime(f"{groups[0]} {groups[1]} {groups[2]}", "%d %b %Y")
                 else:
                     dt = datetime.strptime(f"{groups[0]} {groups[1]} {groups[2]}", "%b %d %Y")
+                if dt.year >= 2025:
+                    return dt.strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+    # Without year
+    patterns2 = [
+        r"(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)",
+        r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*[\s,]+(\d{1,2})",
+    ]
+    for pattern in patterns2:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            groups = match.groups()
+            try:
+                if groups[0].isdigit():
+                    dt = datetime.strptime(f"{groups[0]} {groups[1]} {current_year}", "%d %b %Y")
+                else:
+                    dt = datetime.strptime(f"{groups[0]} {groups[1]} {current_year}", "%b %d %Y")
+                if dt < datetime.now():
+                    dt = dt.replace(year=current_year + 1)
                 return dt.strftime("%Y-%m-%d")
             except ValueError:
                 continue
     return None
 
 
-def _parse_time(text: str) -> Optional[str]:
-    """Extract time from text."""
-    match = re.search(r"(\d{1,2}:\d{2}\s*(?:AM|PM|am|pm))", text)
-    return match.group(1).strip() if match else None
-
-
 def _is_music_event(title: str, snippet: str) -> bool:
-    """Check if the event is music-related."""
     combined = f"{title} {snippet}".lower()
     music_kw = ["concert", "live", "tour", "music", "singing", "band", "dj",
-                "festival", "acoustic", "unplugged", "gig", "jamming", "bhakti", "sufi"]
-    exclude_kw = ["comedy", "standup", "stand-up", "workshop", "class", "food", "dining", "ipl", "cricket"]
-
+                "festival", "acoustic", "unplugged", "gig"]
+    exclude_kw = ["comedy", "standup", "stand-up", "workshop", "food", "ipl", "cricket"]
     if any(kw in combined for kw in exclude_kw):
         return False
     return any(kw in combined for kw in music_kw)
 
 
-def _search_concerts_via_serpapi(city_name: str, api_key: str) -> list[ScrapedConcert]:
-    """Use SerpAPI to find District.in concert listings for a city."""
+def _search_artist_on_district(artist_name: str, api_key: str) -> list[ScrapedConcert]:
+    """Search District.in for a specific artist's concerts via SerpAPI."""
     concerts = []
-
-    query = f"site:district.in {city_name} music concert live event 2026"
+    query = f'"{artist_name}" district.in concert live event 2025 2026'
 
     try:
-        import urllib.request
-        import urllib.parse
-
         params = urllib.parse.urlencode({
             "api_key": api_key,
             "engine": "google",
             "q": query,
-            "num": 20,
+            "num": 10,
         })
         url = f"https://serpapi.com/search.json?{params}"
         req = urllib.request.Request(url, headers={"User-Agent": "MAD-Analytics/1.0"})
-
         with urllib.request.urlopen(req, timeout=15) as response:
             data = json.loads(response.read().decode("utf-8"))
-
     except Exception as e:
-        logger.warning(f"SerpAPI search failed for District {city_name}: {e}")
+        logger.warning(f"  District search failed for {artist_name}: {e}")
         return []
 
+    # Google Events
+    for event in data.get("events_results", []):
+        title = event.get("title", "")
+        if artist_name.lower() not in title.lower():
+            continue
+
+        date_info = event.get("date", "")
+        venue_info = event.get("venue", {}) if isinstance(event.get("venue"), dict) else {}
+        address = event.get("address", [])
+        link = event.get("link", "")
+
+        event_date = _parse_date(str(date_info)) if isinstance(date_info, str) else None
+        venue_name = venue_info.get("name", "") if isinstance(venue_info, dict) else ""
+        city = address[0] if isinstance(address, list) and address else ""
+
+        if event_date:
+            concerts.append(ScrapedConcert(
+                event_name=title,
+                artist_name=artist_name,
+                venue_name=venue_name,
+                city=city,
+                country="India",
+                date=event_date,
+                time=None,
+                price_min=None,
+                price_max=None,
+                currency="INR",
+                source_url=link,
+                source="district",
+            ))
+
+    # Organic results from district.in
     for item in data.get("organic_results", []):
         title = item.get("title", "")
         snippet = item.get("snippet", "")
         link = item.get("link", "")
-        combined = f"{title} {snippet}"
 
-        # Only process music events
+        if "district.in" not in link.lower():
+            continue
         if not _is_music_event(title, snippet):
             continue
-
-        # Skip listing pages
         if link.endswith("/events/") or link.endswith("/events"):
             continue
 
-        # Extract data
-        event_name = title.split(" - District")[0].split(" | ")[0].strip()
-        if not event_name:
+        combined = f"{title} {snippet}"
+        event_date = _parse_date(combined)
+        if not event_date:
             continue
 
-        artist_name = _extract_artist(event_name)
-        event_date = _parse_date(combined)
-        event_time = _parse_time(combined)
+        event_name = title.split(" - District")[0].split(" | ")[0].strip()
         price = _parse_price(combined)
-
-        # Extract venue from snippet
-        venue_name = ""
-        venue_match = re.search(r"(?:at|@|venue[:\s])\s*([^,₹\n]+?)(?:\s*,|\s*₹|\s*$)", combined, re.IGNORECASE)
-        if venue_match:
-            venue = venue_match.group(1).strip()
-            if len(venue) < 60 and not any(kw in venue.lower() for kw in ["onwards", "book", "ticket"]):
-                venue_name = venue
 
         concerts.append(ScrapedConcert(
             event_name=event_name,
             artist_name=artist_name,
-            venue_name=venue_name,
-            city=city_name,
+            venue_name="",
+            city="",
             country="India",
             date=event_date,
-            time=event_time,
+            time=None,
             price_min=price,
             price_max=None,
             currency="INR",
@@ -161,48 +174,44 @@ def _search_concerts_via_serpapi(city_name: str, api_key: str) -> list[ScrapedCo
     return concerts
 
 
-def _extract_artist(title: str) -> str:
-    """Extract artist name from event title."""
-    cleaned = re.sub(r"\s*[-–|]\s*(Live|Tour|Concert|Show|India|Mumbai|Delhi|Bangalore).*$", "", title, flags=re.IGNORECASE)
-    cleaned = re.sub(r"\s+(Live|Tour|Concert|Show|Performing)$", "", cleaned, flags=re.IGNORECASE)
-    return cleaned.strip() or title.strip()
-
-
-def scrape_district(cities: list[str] = None) -> list[ScrapedConcert]:
+def scrape_district(artists: list[dict] = None, cities: list[str] = None) -> list[ScrapedConcert]:
     """
-    Scrape concert listings from District (Zomato) via SerpAPI.
+    Scrape District (Zomato) for tracked artists.
 
     Args:
-        cities: List of city slugs. Defaults to all major cities.
-
-    Returns:
-        List of ScrapedConcert objects.
+        artists: List of dicts with 'artistName'. If None, returns empty.
+        cities: Ignored (searches by artist name).
     """
     api_key = os.environ.get(SERPAPI_KEY_ENV)
     if not api_key:
-        logger.warning("SERPAPI_KEY not set. Cannot scrape District.")
+        logger.warning("SERPAPI_KEY not set. Skipping District.")
         return []
 
-    target_cities = cities or [slug for slug, _ in CITIES]
-    city_names = {slug: name for slug, name in CITIES}
+    if not artists:
+        return []
+
     all_concerts: list[ScrapedConcert] = []
 
-    for city_slug in target_cities:
-        city_name = city_names.get(city_slug, city_slug.replace("-", " ").title())
-        logger.info(f"Searching District concerts in {city_name}...")
-        concerts = _search_concerts_via_serpapi(city_name, api_key)
+    for artist in artists:
+        name = artist.get("artistName", "")
+        if not name:
+            continue
+
+        logger.info(f"  District: {name}...")
+        concerts = _search_artist_on_district(name, api_key)
         all_concerts.extend(concerts)
-        logger.info(f"  Found {len(concerts)} music events")
+        if concerts:
+            logger.info(f"    Found {len(concerts)} concerts")
         time.sleep(2)
 
     # Deduplicate
     seen = set()
     unique = []
     for c in all_concerts:
-        key = f"{c.event_name}|{c.city}|{c.date}"
+        key = f"{c.artist_name}|{c.city}|{c.date}"
         if key not in seen:
             seen.add(key)
             unique.append(c)
 
-    logger.info(f"District total: {len(unique)} unique concerts")
+    logger.info(f"  District total: {len(unique)} unique concerts")
     return unique

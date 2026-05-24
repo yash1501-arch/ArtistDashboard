@@ -95,6 +95,8 @@ KNOWN_VENUES: dict[tuple[str, str], int] = {
     ("jawaharlal nehru stadium", "shillong"): 40000,
     ("mahalaxmi race course", "mumbai"): 30000,
     ("shanmukhananda auditorium", "mumbai"): 2500,
+    ("terraform", "bangalore"): 5000,
+    ("roxanne`s bar & all day diner", "mumbai"): 250,
 
     # UAE
     ("expo city dubai", "dubai"): 4000,
@@ -104,6 +106,81 @@ KNOWN_VENUES: dict[tuple[str, str], int] = {
 
     # Singapore
     ("singapore indoor stadium", "singapore"): 12000,
+    ("capitol theatre", "singapore"): 930,
+
+    # Indonesia
+    ("britama arena, mahaka square", "kota administrasi jakarta utara"): 7000,
+
+    # ── Additional venues (researched) ─────────────────────────────────────
+
+    # USA - additional
+    ("agganis arena", "boston"): 7200,
+    ("amalie arena", "tampa"): 20500,
+    ("bc place stadium", "vancouver"): 54500,
+    ("eaglebank arena", "fairfax"): 10000,
+    ("filene center", "vienna"): 7000,
+    ("gas south arena", "duluth"): 13000,
+    ("grand ole opry house", "nashville"): 4400,
+    ("great lawn in central park", "new york"): 80000,
+    ("hard rock live at the etess arena", "atlantic city"): 7000,
+    ("lenovo center", "raleigh"): 5500,
+    ("now arena", "hoffman estates"): 11000,
+    ("royale", "boston"): 1200,
+    ("sun national bank center", "trenton"): 8600,
+    ("terminal west", "atlanta"): 1000,
+    ("terrace theater", "long beach"): 3051,
+    ("texas trust cu theatre", "grand prairie"): 6350,
+    ("the regency ballroom", "san francisco"): 1000,
+    ("the studio", "dallas"): 400,
+    ("the tonight show starring jimmy fallon", "new york"): 215,
+
+    # Canada - additional
+    ("commodore ballroom", "vancouver"): 990,
+    ("history", "toronto"): 2500,
+    ("the theatre at great canadian casino", "toronto"): 5000,
+
+    # UK - additional
+    ("manchester academy 2, university of manchester", "manchester"): 950,
+    ("theatre royal drury lane", "london"): 2196,
+    ("tottenham hotspur stadium", "london"): 62850,
+
+    # Germany - additional
+    ("batschkapp", "frankfurt"): 1500,
+    ("columbia theater", "berlin"): 850,
+    ("frannz club", "berlin"): 500,
+
+    # France - additional
+    ("le trabendo", "paris"): 700,
+
+    # Ireland - additional
+    ("the academy", "dublin"): 900,
+    ("the convention centre dublin", "dublin"): 2000,
+
+    # Australia - additional
+    ("adelaide entertainment centre", "adelaide"): 11300,
+    ("brisbane convention centre", "brisbane"): 4000,
+    ("brisbane entertainment centre", "brisbane"): 13500,
+    ("corner hotel", "melbourne"): 500,
+    ("enmore theatre", "newtown"): 1600,
+    ("evan theatre", "penrith"): 2000,
+    ("forum melbourne", "melbourne"): 1500,
+    ("liberty hall", "sydney"): 800,
+    ("lion arts factory", "adelaide"): 400,
+    ("margaret court arena", "melbourne"): 7500,
+    ("metro theatre", "sydney"): 1150,
+    ("palais theatre", "melbourne"): 2896,
+    ("riverside theatre", "perth"): 900,
+    ("sleeman centre", "brisbane"): 5000,
+    ("the brightside", "brisbane"): 400,
+    ("the triffid", "newstead"): 400,
+    ("trak lounge bar", "melbourne"): 200,
+    ("amplifier", "perth"): 700,
+
+    # Denmark
+    ("royal arena", "copenhagen"): 16000,
+
+    # Sweden
+    ("avicii arena", "stockholm"): 16000,
 }
 
 

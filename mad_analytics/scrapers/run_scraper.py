@@ -180,16 +180,24 @@ def main():
 
     all_concerts: list[ScrapedConcert] = []
 
+    # Get tracked artists from DB (needed for all scrapers now)
+    from sqlalchemy import create_engine, text as sql_text
+    engine = create_engine(_normalize_db_url(args.db))
+    with engine.connect() as conn:
+        artists = [dict(r) for r in conn.execute(sql_text('SELECT id, "artistName" FROM artists WHERE active = true')).mappings().all()]
+    engine.dispose()
+    print(f"  Tracked artists: {len(artists)}\n")
+
     # Scrape
     if args.source in ("bookmyshow", "all"):
         print("Scraping BookMyShow...")
-        bms = scrape_bookmyshow(cities)
+        bms = scrape_bookmyshow(artists)
         all_concerts.extend(bms)
         print(f"  BookMyShow: {len(bms)} concerts found")
 
     if args.source in ("district", "all"):
         print("Scraping District (Zomato)...")
-        dist = scrape_district(cities)
+        dist = scrape_district(artists)
         all_concerts.extend(dist)
         print(f"  District: {len(dist)} concerts found")
 

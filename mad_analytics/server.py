@@ -80,11 +80,7 @@ def _run_scraper_job():
             from .scrapers.district import scrape_district
             from .scrapers.songkick import scrape_songkick
 
-            logger.info("[Scheduler] Running BMS + District + Songkick scrapers...")
-            all_concerts.extend(scrape_bookmyshow())
-            all_concerts.extend(scrape_district())
-
-            # Get tracked artists for artist-based scrapers
+            # Get tracked artists for all artist-based scrapers
             from sqlalchemy import create_engine, text as sql_text
             normalized = db_url.replace("postgres://", "postgresql://", 1) if db_url.startswith("postgres://") else db_url
             engine = create_engine(normalized)
@@ -92,12 +88,16 @@ def _run_scraper_job():
                 artists = [dict(r) for r in conn.execute(sql_text('SELECT id, "artistName" FROM artists WHERE active = true')).mappings().all()]
             engine.dispose()
 
+            logger.info("[Scheduler] Running BMS + District + Songkick scrapers...")
+            all_concerts.extend(scrape_bookmyshow(artists))
+            all_concerts.extend(scrape_district(artists))
             all_concerts.extend(scrape_songkick(artists))
 
         # Scrape Setlist.fm (has its own API key)
         if os.environ.get("SETLISTFM_API_KEY") or os.environ.get("SETLIST_API_KEY"):
             from .scrapers.setlistfm import scrape_setlistfm
             if not os.environ.get("SERPAPI_KEY"):
+                # Need to fetch artists if not already done above
                 from sqlalchemy import create_engine, text as sql_text
                 normalized = db_url.replace("postgres://", "postgresql://", 1) if db_url.startswith("postgres://") else db_url
                 engine = create_engine(normalized)
@@ -276,6 +276,7 @@ def _run_predict_empty_concerts_job():
         for row in rows:
             capacity = int(row["capacity"])
             atp = float(row["avgTicketPrice"] or 0)
+            artist_id = row["artistId"]
 
             # If no ATP, estimate from artist's other concerts
             if atp <= 0:
@@ -283,12 +284,20 @@ def _run_predict_empty_concerts_job():
                     avg = conn.execute(sql_text("""
                         SELECT AVG("avgTicketPrice") FROM concerts
                         WHERE "artistId" = :aid AND "avgTicketPrice" > 0
-                    """), {"aid": row["artistId"]}).scalar()
-                atp = float(avg or 1500)  # Default ₹1500 if no data
+                    """), {"aid": artist_id}).scalar()
+                atp = float(avg or 1500)
 
-            # Simple prediction: use demand-based sell-through
-            # Base sell-through 65% (average from our data)
-            sell_through = 0.65
+            # Get artist popularity for sell-through estimation
+            with engine.connect() as conn:
+                pop = conn.execute(sql_text("""
+                    SELECT popularity FROM artists WHERE id = :aid
+                """), {"aid": artist_id}).scalar()
+            popularity = float(pop or 50)
+
+            # Sell-through based on artist popularity:
+            # popularity 100 → 95%, 80 → 80%, 60 → 65%, 40 → 50%, 20 → 35%
+            sell_through = min(0.95, max(0.30, 0.30 + (popularity / 100) * 0.65))
+
             tickets_sold = min(int(capacity * sell_through), capacity)
             revenue = round(tickets_sold * atp, 2)
 
@@ -344,18 +353,27 @@ def _run_data_validation_job():
                         WHERE id = :id
                     """), {"id": row[0]})
 
-            # Fix 3: Unrealistically low sell-through on predicted concerts (< 15%)
-            low_st = conn.execute(sql_text("""
-                UPDATE concerts
-                SET "ticketsSold" = CAST(capacity * 0.65 AS INTEGER),
-                    "totalRevenue" = CAST(capacity * 0.65 AS INTEGER) * COALESCE("avgTicketPrice", 1500)
-                WHERE capacity > 0
-                  AND "ticketsSold" > 0
-                  AND ("ticketsSold"::float / capacity) < 0.15
-                  AND source IN ('setlistfm', 'songkick', 'bookmyshow', 'district')
-                RETURNING id
-            """)).fetchall()
-            fixed += len(low_st)
+            # Fix 3: Unrealistically low sell-through on predicted concerts (< 20%)
+            # Recalculate using artist popularity
+            low_st_rows = conn.execute(sql_text("""
+                SELECT c.id, c.capacity, c."avgTicketPrice", c."artistId", a.popularity
+                FROM concerts c
+                JOIN artists a ON a.id = c."artistId"
+                WHERE c.capacity > 0
+                  AND c."ticketsSold" > 0
+                  AND (c."ticketsSold"::float / c.capacity) < 0.20
+                  AND c.source IN ('setlistfm', 'songkick', 'bookmyshow', 'district')
+            """)).mappings().all()
+
+            for r in low_st_rows:
+                pop = float(r["popularity"] or 50)
+                sell_through = min(0.95, max(0.30, 0.30 + (pop / 100) * 0.65))
+                new_tix = min(int(int(r["capacity"]) * sell_through), int(r["capacity"]))
+                new_rev = round(new_tix * float(r["avgTicketPrice"] or 1500), 2)
+                conn.execute(sql_text("""
+                    UPDATE concerts SET "ticketsSold" = :tix, "totalRevenue" = :rev WHERE id = :id
+                """), {"tix": new_tix, "rev": new_rev, "id": r["id"]})
+                fixed += 1
 
             # Fix 4: Revenue = 0 but tickets > 0 and price > 0
             conn.execute(sql_text("""
