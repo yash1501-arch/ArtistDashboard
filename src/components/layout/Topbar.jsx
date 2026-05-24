@@ -43,13 +43,14 @@ function Topbar() {
       </h2>
 
       {/* Search */}
+      {/* 
       <div className="flex items-center gap-2 px-3 py-2 rounded-xl w-48"
         style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
         <Search size={14} style={{ color: 'var(--text-muted)' }} />
         <input type="text" placeholder="Search..."
           className="bg-transparent text-sm outline-none w-full"
           style={{ color: 'var(--text-primary)', fontFamily: 'Satoshi' }} />
-      </div>
+      </div> */}
 
       {/* Artist Type Toggle — only shows after selection */}
       {artistType && (

@@ -213,12 +213,12 @@ function ArtistCard({ artist, onClick, delay = 0 }) {
         </div>
       </div>
 
-      {/* Total Followers */}
+      {/* Spotify Monthly Listeners */}
       <div className="mb-3">
         <p className="text-xs uppercase tracking-widest mb-1"
-          style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Total Listeners (spotify)</p>
+          style={{ color: 'var(--text-muted)', fontSize: '10px' }}>Spotify Monthly Listeners</p>
         <p className="font-display font-bold text-2xl" style={{ color: 'var(--text-primary)' }}>
-          {formatNumber(totalFollowers)}
+          {formatNumber(followers.spotify || 0)}
         </p>
       </div>
 
@@ -357,7 +357,7 @@ function Artists() {
             className="bg-transparent text-sm outline-none w-full"
             style={{ color: 'var(--text-primary)', fontFamily: 'Satoshi' }} />
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* <div className="flex items-center gap-2 flex-wrap">
           <Filter size={14} style={{ color: 'var(--text-muted)' }} />
           {GENRES.map(g => (
             <button key={g} onClick={() => setGenre(g)}
@@ -371,7 +371,7 @@ function Artists() {
               {g}
             </button>
           ))}
-        </div>
+        </div> */}
       </div>
 
       <p className="text-xs mb-4 uppercase tracking-widest"
