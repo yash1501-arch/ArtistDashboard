@@ -2,7 +2,8 @@ import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 
 export const prisma = new PrismaClient({
-  log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
+  log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],
+  datasourceUrl: process.env.DATABASE_URL + (process.env.DATABASE_URL?.includes('?') ? '&' : '?') + 'connection_limit=3',
 });
 
 // Redis client (optional - used for caching)

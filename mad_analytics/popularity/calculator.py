@@ -14,7 +14,6 @@ SNAPSHOT_PLATFORMS = [
     "youtubeSubscribers",
     "instagramFollowers",
     "facebookFollowers",
-    "twitterFollowers",
 ]
 
 PLATFORM_LABELS = {
@@ -22,7 +21,6 @@ PLATFORM_LABELS = {
     "youtubeSubscribers": "youtube",
     "instagramFollowers": "instagram",
     "facebookFollowers": "facebook",
-    "twitterFollowers": "twitter",
 }
 
 
@@ -57,14 +55,19 @@ def _build_snapshot_matrix(rows: list[dict[str, object]]) -> pd.DataFrame:
 
 
 def _entropy_weights(matrix: pd.DataFrame) -> dict[str, float]:
-    """Compute entropy-based weights for each platform column."""
+    """Compute entropy-based weights with Spotify priority and Twitter cap.
+    
+    Modifications from pure entropy:
+    - Spotify gets a minimum floor of 25% (it's the core music metric)
+    - Twitter is capped at 25% (many artists don't have it)
+    - Remaining weight distributed by entropy among other platforms
+    """
     if matrix.empty:
         return {}
 
     n_rows = len(matrix)
     entropy_factor = 1.0 / np.log(n_rows) if n_rows > 1 else 0.0
     transformed = np.log1p(matrix)
-    weights: dict[str, float] = {}
     diversifications: dict[str, float] = {}
 
     for platform in transformed.columns:
@@ -85,7 +88,35 @@ def _entropy_weights(matrix: pd.DataFrame) -> dict[str, float]:
         equal_weight = 1.0 / max(1, len(transformed.columns))
         return {platform: equal_weight for platform in transformed.columns}
 
-    return {platform: value / total for platform, value in diversifications.items()}
+    # Raw entropy weights
+    raw_weights = {platform: value / total for platform, value in diversifications.items()}
+
+    # Apply constraints:
+    # 1. Spotify minimum floor: 40% (it's the core music metric)
+    SPOTIFY_FLOOR = 0.40
+
+    adjusted = raw_weights.copy()
+
+    # Ensure Spotify floor
+    spotify_key = next((k for k in adjusted if "spotify" in k.lower()), None)
+    deficit_for_floor = 0.0
+    if spotify_key and adjusted[spotify_key] < SPOTIFY_FLOOR:
+        deficit_for_floor = SPOTIFY_FLOOR - adjusted[spotify_key]
+        adjusted[spotify_key] = SPOTIFY_FLOOR
+
+        # Redistribute deficit from other platforms proportionally
+        other_keys = [k for k in adjusted if k != spotify_key]
+        other_total = sum(adjusted[k] for k in other_keys)
+        if other_total > 0:
+            for k in other_keys:
+                adjusted[k] -= deficit_for_floor * (adjusted[k] / other_total)
+
+    # Normalize to sum to 1.0
+    final_total = sum(adjusted.values())
+    if final_total > 0:
+        adjusted = {k: v / final_total for k, v in adjusted.items()}
+
+    return adjusted
 
 
 def _normalize_vector(series: pd.Series) -> pd.Series:
