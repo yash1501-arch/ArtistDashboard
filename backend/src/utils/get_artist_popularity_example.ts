@@ -33,7 +33,6 @@ export type ArtistPopularityInput = {
   instagramFollowers?: unknown;
   facebookFollowers?: unknown;
   twitterFollowers?: unknown;
-  appleMusicListeners?: unknown;
 };
 
 export type ArtistPopularityPlatform = keyof ArtistPopularityInput;
@@ -43,8 +42,7 @@ const ARTIST_POPULARITY_PLATFORMS: ArtistPopularityPlatform[] = [
   'youtubeSubscribers',
   'instagramFollowers',
   'facebookFollowers',
-  'twitterFollowers',
-  'appleMusicListeners'
+  'twitterFollowers'
 ];
 
 const EQUAL_ARTIST_POPULARITY_WEIGHTS: Record<ArtistPopularityPlatform, number> =
@@ -156,7 +154,6 @@ export async function getArtistPopularityFromDb(artistName: string): Promise<num
       instagramFollowers: artist.instagramFollowers,
       facebookFollowers: artist.facebookFollowers,
       twitterFollowers: artist.twitterFollowers,
-      appleMusicListeners: artist.appleMusicListeners
     };
 
     console.log(`Found artist: ${artist.artistName}`);
@@ -166,7 +163,6 @@ export async function getArtistPopularityFromDb(artistName: string): Promise<num
     console.log(`  Instagram Followers: ${artistData.instagramFollowers?.toLocaleString() ?? 'N/A'}`);
     console.log(`  Facebook Followers: ${artistData.facebookFollowers?.toLocaleString() ?? 'N/A'}`);
     console.log(`  Twitter Followers: ${artistData.twitterFollowers?.toLocaleString() ?? 'N/A'}`);
-    console.log(`  Apple Music Listeners: ${artistData.appleMusicListeners?.toLocaleString() ?? 'N/A'}`);
 
     // For demonstration, we'll create a dummy second artist to build the entropy model
     // In practice, the system would use all artists in the database to build the model
@@ -176,7 +172,6 @@ export async function getArtistPopularityFromDb(artistName: string): Promise<num
       instagramFollowers: artistData.instagramFollowers?.toString() === '0' || !artistData.instagramFollowers ? 50 : 0,
       facebookFollowers: artistData.facebookFollowers?.toString() === '0' || !artistData.facebookFollowers ? 20 : 0,
       twitterFollowers: artistData.twitterFollowers?.toString() === '0' || !artistData.twitterFollowers ? 10 : 0,
-      appleMusicListeners: artistData.appleMusicListeners?.toString() === '0' || !artistData.appleMusicListeners ? 5 : 0
     };
 
     // Build entropy model using the target artist and a dummy artist for comparison

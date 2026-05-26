@@ -46,7 +46,6 @@ export const createArtistSchema = z.object({
   twitterFollowers: z.number().int().nonnegative().optional().nullable(),
   spotifyMonthlyListeners: z.number().int().nonnegative().optional().nullable(),
   youtubeSubscribers: z.number().int().nonnegative().optional().nullable(),
-  appleMusicListeners: z.number().int().nonnegative().optional().nullable(),
   genreIds: z.array(z.string()).optional(),
 });
 
@@ -72,7 +71,6 @@ export const updateArtistSchema = z.object({
   twitterFollowers: z.number().int().nonnegative().optional().nullable(),
   spotifyMonthlyListeners: z.number().int().nonnegative().optional().nullable(),
   youtubeSubscribers: z.number().int().nonnegative().optional().nullable(),
-  appleMusicListeners: z.number().int().nonnegative().optional().nullable(),
   genreIds: z.array(z.string()).optional(),
 });
 

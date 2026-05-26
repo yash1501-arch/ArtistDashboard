@@ -6,7 +6,6 @@ export type ArtistPopularityInput = {
   instagramFollowers?: unknown;
   facebookFollowers?: unknown;
   twitterFollowers?: unknown;
-  appleMusicListeners?: unknown;
 };
 
 export type ArtistPopularityPlatform = keyof ArtistPopularityInput;
@@ -18,8 +17,7 @@ export const ARTIST_POPULARITY_PLATFORMS: ArtistPopularityPlatform[] = [
   'youtubeSubscribers',
   'instagramFollowers',
   'facebookFollowers',
-  'twitterFollowers',
-  'appleMusicListeners',
+  'twitterFollowers'
 ];
 
 const CACHE_KEY = 'artist-popularity:entropy-weights:v1';
@@ -70,7 +68,6 @@ export async function getEntropyArtistPopularityModel(): Promise<EntropyArtistPo
       instagramFollowers: true,
       facebookFollowers: true,
       twitterFollowers: true,
-      appleMusicListeners: true,
     },
   });
 

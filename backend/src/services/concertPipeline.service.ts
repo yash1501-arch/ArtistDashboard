@@ -428,7 +428,6 @@ export class ConcertPipelineService {
       twitterFollowers: bigint | number | null;
       spotifyMonthlyListeners: bigint | number | null;
       youtubeSubscribers: bigint | number | null;
-      appleMusicListeners: bigint | number | null;
     },
     validation: HybridValidationResult
   ): Promise<{ action: 'created' | 'updated'; concert: Concert }> {
@@ -709,7 +708,6 @@ export class ConcertPipelineService {
       twitterFollowers: bigint | number | null;
       spotifyMonthlyListeners: bigint | number | null;
       youtubeSubscribers: bigint | number | null;
-      appleMusicListeners: bigint | number | null;
     },
     city: string,
     country: string
@@ -740,7 +738,7 @@ export class ConcertPipelineService {
           country: { equals: country, mode: 'insensitive' },
         },
       }),
-      prisma.concert.count({ where: { artistId: artist.id } }),
+      prisma.concert.count({ where: { artistId: artist.id } })
     ]);
 
     const cityHistoryBoost = totalConcerts > 0 ? Math.min(18, (cityConcerts / totalConcerts) * 45) : 0;
@@ -833,7 +831,7 @@ export class ConcertPipelineService {
         concertDate: event.concertDate,
         city: { equals: event.city, mode: 'insensitive' },
         venueName: { equals: event.venueName, mode: 'insensitive' },
-      },
+      }
     ];
 
     if (event.sourceUrl) {
@@ -864,7 +862,7 @@ export class ConcertPipelineService {
         event.artistId,
         event.concertDate.toISOString().slice(0, 10),
         event.venueName.toLowerCase(),
-        event.city.toLowerCase(),
+        event.city.toLowerCase()
       ].join('|');
 
       if (seen.has(key)) continue;
@@ -957,7 +955,7 @@ export class ConcertPipelineService {
       'paris',
       'tokyo',
       'singapore',
-      'dubai',
+      'dubai'
     ]);
 
     return majorMarkets.has(city.toLowerCase()) ? 8 : 0;

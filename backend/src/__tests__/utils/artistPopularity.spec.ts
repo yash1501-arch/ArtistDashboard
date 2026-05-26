@@ -21,7 +21,6 @@ describe('artist popularity utilities', () => {
         instagramFollowers: 60,
         facebookFollowers: 10,
         twitterFollowers: 5,
-        appleMusicListeners: 20,
       },
       {
         spotifyMonthlyListeners: 200,
@@ -29,7 +28,6 @@ describe('artist popularity utilities', () => {
         instagramFollowers: 40,
         facebookFollowers: 15,
         twitterFollowers: 9,
-        appleMusicListeners: 25,
       },
       {
         spotifyMonthlyListeners: 50,
@@ -37,8 +35,7 @@ describe('artist popularity utilities', () => {
         instagramFollowers: 150,
         facebookFollowers: 12,
         twitterFollowers: 2,
-        appleMusicListeners: 10,
-      },
+      }
     ]);
 
     const sum = ARTIST_POPULARITY_PLATFORMS.reduce((total, key) => total + model.weights[key], 0);
@@ -53,8 +50,7 @@ describe('artist popularity utilities', () => {
         instagramFollowers: 0,
         facebookFollowers: 0,
         twitterFollowers: 0,
-        appleMusicListeners: 0,
-      },
+      }
     ]);
 
     expect(model.weights).toEqual(EQUAL_ARTIST_POPULARITY_WEIGHTS);
@@ -68,7 +64,6 @@ describe('artist popularity utilities', () => {
         instagramFollowers: 250_000,
         facebookFollowers: 100_000,
         twitterFollowers: 50_000,
-        appleMusicListeners: 25_000,
       },
       {
         spotifyMonthlyListeners: 200_000,
@@ -76,8 +71,7 @@ describe('artist popularity utilities', () => {
         instagramFollowers: 180_000,
         facebookFollowers: 80_000,
         twitterFollowers: 30_000,
-        appleMusicListeners: 15_000,
-      },
+      }
     ]);
 
     const score = calculateArtistPopularityWithModel(

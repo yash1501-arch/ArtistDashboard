@@ -186,8 +186,7 @@ export const dashboardController = {
             Number(artist.instagramFollowers || 0) +
             Number(artist.youtubeSubscribers || 0) +
             Number(artist.spotifyMonthlyListeners || 0) +
-            Number(artist.facebookFollowers || 0) +
-            Number(artist.appleMusicListeners || 0);
+            Number(artist.facebookFollowers || 0);
           
           return {
             artistId: artist.id,
@@ -195,7 +194,7 @@ export const dashboardController = {
             platforms: [
               { platform: 'INSTAGRAM', followers: Number(artist.instagramFollowers || 0) },
               { platform: 'YOUTUBE', followers: Number(artist.youtubeSubscribers || 0) },
-              { platform: 'SPOTIFY', followers: Number(artist.spotifyMonthlyListeners || 0) },
+              { platform: 'SPOTIFY', followers: Number(artist.spotifyMonthlyListeners || 0) }
             ],
             artist: artist,
           };

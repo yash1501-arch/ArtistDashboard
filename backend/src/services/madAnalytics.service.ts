@@ -180,8 +180,7 @@ const snapshotMetricSeeds = (artist: Record<string, unknown> | null, payload: Re
     },
     {
       platform: 'apple_music',
-      streams: toFiniteNumber(artist?.appleMusicListeners),
-    },
+    }
   ].filter((seed) => Object.values(seed).some((value) => typeof value === 'number' && value > 0));
 };
 
@@ -331,7 +330,7 @@ const reachPopularity = (artist: ArtistWithMetrics | null): number => {
     artist.instagramFollowers,
     artist.facebookFollowers,
     artist.twitterFollowers,
-    artist.appleMusicListeners,
+    artist.appleMusicListeners
   ].map((value) => toFiniteNumber(value));
   const totalReach = reach.reduce((sum, value) => sum + value, 0);
   if (totalReach <= 0) return 50;
