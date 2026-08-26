@@ -27,7 +27,12 @@ services:
     buildCommand: npm ci && npx prisma generate && npx playwright install --with-deps chromium
     startCommand: npm run viberate:refresh
     envVars:
-      - key: DATABASE_URL            # set in dashboard (secret) — Supabase pooler
+      # IMPORTANT: this Cron-only DATABASE_URL MUST append ?connection_limit=3
+      # (e.g. ...supabase.com:5432/postgres?sslmode=require&pgbouncer=true&connection_limit=3)
+      # so this job's Prisma pool never exceeds a few connections against the
+      # Supabase Session Pooler's 15-client cap (shared with the web backend).
+      # Do NOT change the WEB service's DATABASE_URL — this override is Cron-only.
+      - key: DATABASE_URL            # set in dashboard (secret) — Supabase pooler + connection_limit=3
         sync: false
       - key: DIRECT_URL              # set in dashboard (secret) — Supabase direct
         sync: false

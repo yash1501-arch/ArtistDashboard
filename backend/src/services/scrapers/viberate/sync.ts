@@ -69,9 +69,13 @@ const ROG_WINDOWS: { field: 'rogDaily' | 'rogWeekly' | 'rogMonthly'; days: numbe
   { field: 'rogMonthly', days: 30 },
 ];
 
-// How many upserts to run concurrently per batch when backfilling
-// platform_metrics (~18k rows total across all artists/platforms).
-const UPSERT_BATCH_SIZE = 100;
+// Max concurrent platform_metric upserts. runBatched() runs this many at once
+// via Promise.all, and each upsert takes one Prisma pool connection — so this is
+// effectively the DB write-concurrency cap. Kept at 3 to stay well under the
+// Supabase Session Pooler's 15-client limit (which is shared with the web
+// backend), preventing EMAXCONNSESSION. Do NOT raise without also raising the
+// pooler cap / connection_limit.
+const UPSERT_BATCH_SIZE = 3;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -277,6 +281,7 @@ export async function runSync(opts: { limit?: number; slug?: string } = {}): Pro
 
   console.log('\n[sync] Part B — backfilling PlatformMetric daily history');
   console.log('  (tiktok skipped — Platform enum has no TIKTOK value)');
+  console.log(`[VIBERATE] platform metric sync concurrency: ${UPSERT_BATCH_SIZE}`);
   let totalRows = 0;
   for (const artist of artists) {
     console.log(`\n[${artist.artistName}]`);
