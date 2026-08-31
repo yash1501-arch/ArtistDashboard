@@ -1,0 +1,84 @@
+name: Viberate Refresh
+
+# Manual trigger only for now. A recurring (15-day) schedule will be added later,
+# after manual verification. Do NOT add a `schedule:` trigger yet.
+on:
+  workflow_dispatch:
+    inputs:
+      artist_slug:
+        description: "Optional: collect/sync/score only this Viberate slug (e.g. arijit-singh)"
+        required: false
+        type: string
+      limit:
+        description: "Optional: cap to N artists"
+        required: false
+        type: string
+
+# One Viberate collection at a time; queued dispatches wait rather than cancel.
+concurrency:
+  group: viberate-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Install Chromium (Playwright)
+        run: npx playwright install --with-deps chromium
+
+      # Decode the base64 session secret to a private file at runtime.
+      # Never printed, never uploaded, never persisted beyond the runner.
+      - name: Provision Viberate session
+        env:
+          VIBERATE_SESSION_B64: ${{ secrets.VIBERATE_SESSION_B64 }}
+        run: |
+          if [ -z "$VIBERATE_SESSION_B64" ]; then
+            echo "::error::VIBERATE_SESSION_B64 secret is not set."
+            exit 1
+          fi
+          printf '%s' "$VIBERATE_SESSION_B64" | base64 -d > /tmp/viberate-session.json
+          chmod 600 /tmp/viberate-session.json
+          echo "Session provisioned to /tmp/viberate-session.json"
+
+      # Runs the existing isolated runner (collector -> sync -> scorer).
+      # DATABASE_URL secret MUST already contain connection_limit=3 (Cron/CI-only).
+      # The job fails automatically if the runner exits non-zero.
+      - name: Run Viberate refresh
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          VIBERATE_SESSION_PATH: /tmp/viberate-session.json
+          VIBERATE_SCHEDULER_ENABLED: "false"
+          ARTIST_SLUG: ${{ inputs.artist_slug }}
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          ARGS=()
+          if [ -n "$ARTIST_SLUG" ]; then ARGS+=(--slug "$ARTIST_SLUG"); fi
+          if [ -n "$LIMIT" ]; then ARGS+=(--limit "$LIMIT"); fi
+          echo "Running viberate:refresh ${ARGS[*]}"
+          npm run viberate:refresh -- "${ARGS[@]}"
+
+      # Best-effort cleanup; the runner is ephemeral regardless.
+      - name: Remove session file
+        if: always()
+        run: rm -f /tmp/viberate-session.json
